@@ -44,6 +44,11 @@
   box-sizing: border-box; /* Breiten inklusive Rahmen rechnen – vermeidet Überraschungen */
 }
 
+/* Ausgeblendete Elemente bleiben ausgeblendet, auch wenn eine Klasse "display" setzt */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -233,4 +238,184 @@ main {
   border-radius: 50%;
   margin-right: 8px;
   vertical-align: middle;
+}
+
+/* =====================================================================
+   Meilenstein 2: Bildschirme, Listen, Formulare
+   ===================================================================== */
+
+/* Abstand zwischen mehreren Karten untereinander */
+main > * + * {
+  margin-top: 16px;
+}
+
+/* Titel in der Kopfzeile als Link ohne Unterstreichung */
+.home-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.back-link {
+  display: inline-block;
+  padding: 8px 0;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+/* Links, die wie Knöpfe aussehen, brauchen dieselbe Zentrierung */
+a.btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.btn-danger {
+  background: var(--q-poor);
+  border-color: var(--q-poor);
+  color: #ffffff;
+}
+
+/* Eingabefelder: 16px Schrift verhindert das automatische Zoomen am Handy */
+input[type="text"],
+select {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  min-width: 0;
+}
+
+input[type="text"]:focus,
+select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Formularzeile: Elemente nebeneinander, brechen am Handy um */
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.form-row input[type="text"] {
+  flex: 1 1 160px;
+}
+
+.form-row input.input-number {
+  flex: 0 0 72px;
+  text-align: center;
+}
+
+.form-error {
+  color: var(--q-poor);
+  margin: 8px 0 0;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--text-muted);
+}
+
+.checkbox input {
+  width: 20px;
+  height: 20px;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.card h3 {
+  margin: 20px 0 8px;
+  font-size: 1rem;
+}
+
+.card h2 + h3,
+.card h3:first-child {
+  margin-top: 0;
+}
+
+/* Liste der Teams */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.list-link {
+  display: block;
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+/* Kader: Nummer | Name | Knöpfe */
+.roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.roster-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.roster-row.editing {
+  display: block;
+}
+
+.roster-number {
+  flex: 0 0 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+.roster-name {
+  flex: 1 1 120px;
+}
+
+/* Knöpfe rechts in der Zeile, auf schmalen Bildschirmen darunter */
+.roster-row .row-actions {
+  margin-left: auto;
 }

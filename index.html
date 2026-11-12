@@ -27,8 +27,9 @@
 
   <!-- Kopfzeile mit App-Name und den beiden Schaltern -->
   <header class="topbar">
-    <!-- data-i18n="app.title": hier setzt i18n.js den Text aus der Sprachdatei ein -->
-    <h1 data-i18n="app.title">Volleyball Statistics</h1>
+    <!-- data-i18n="app.title": hier setzt i18n.js den Text aus der Sprachdatei ein.
+         Der Titel ist ein Link zurück zur Startseite (#/). -->
+    <h1><a href="#/" class="home-link" data-i18n="app.title">Volleyball Statistics</a></h1>
 
     <div class="topbar-buttons">
       <!-- Sprache umschalten (DE <-> EN) -->
@@ -38,22 +39,9 @@
     </div>
   </header>
 
-  <!-- Hauptbereich. Meilenstein 1a: vorläufiger Testbildschirm für das Kreismenü -->
-  <main id="app">
-    <section class="card">
-      <h2 data-i18n="test.title">Kreismenü-Test</h2>
-      <p data-i18n="test.hint">…</p>
-
-      <!-- Halbes Spielfeld: oben das Netz, darunter 6 Spieler (werden von radial-test.js erzeugt) -->
-      <div class="net"></div>
-      <div id="court" class="court"></div>
-    </section>
-
-    <section class="card">
-      <h2 data-i18n="test.logTitle">Letzte Eingaben</h2>
-      <ol id="log" class="log"></ol>
-    </section>
-  </main>
+  <!-- Hauptbereich: main.js zeichnet hier den jeweiligen Bildschirm hinein
+       (Teamliste, Team mit Kader, Kreismenü-Test). -->
+  <main id="app"></main>
 
   <!--
     JavaScript wird als "module" geladen. Das erlaubt, Code auf mehrere Dateien

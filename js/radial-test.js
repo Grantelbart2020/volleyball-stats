@@ -1,13 +1,14 @@
 /*
   radial-test.js – VORLÄUFIGER Testbildschirm für Meilenstein 1a.
 
-  Zeigt ein halbes Spielfeld mit 6 Spielern und eine Liste der letzten Eingaben.
-  Es wird noch nichts gespeichert. Diese Datei wird später durch capture.js
+  Zeigt ein halbes Spielfeld mit 6 Beispielspielern und eine Liste der letzten Eingaben.
+  Es wird hier absichtlich nichts gespeichert. Diese Datei wird später durch capture.js
   und court.js ersetzt; radial-menu.js und ratings.js bleiben erhalten.
 */
 import { ACTIONS } from "./ratings.js";
 import { createRadialMenu } from "./radial-menu.js";
 import { t } from "./i18n.js";
+import { el } from "./dom.js";
 
 // Beispielspieler. Die Reihenfolge entspricht dem Spielfeld:
 // vorne (am Netz) Positionen 4, 3, 2 – hinten Positionen 5, 6, 1.
@@ -30,6 +31,7 @@ function currentActionLabel() {
 // Zeichnet die Liste der letzten Eingaben neu (neueste oben, max. 10).
 function renderLog() {
   const log = document.getElementById("log");
+  if (!log) return; // Testbildschirm gerade nicht sichtbar
   log.innerHTML = ""; // Liste leeren
 
   if (entries.length === 0) {
@@ -55,29 +57,37 @@ function renderLog() {
   }
 }
 
-export function initRadialTest() {
-  const court = document.getElementById("court");
+// Das Kreismenü wird nur EINMAL erzeugt und dann wiederverwendet,
+// auch wenn der Bildschirm neu gezeichnet wird (z. B. nach Sprachwechsel).
+let menu = null;
 
-  const menu = createRadialMenu({
-    getActionLabel: currentActionLabel,
-    // Mitte antippen -> nächste Aktion; nach der letzten wieder von vorn
-    onCenterTap: () => { actionIndex = (actionIndex + 1) % ACTIONS.length; },
-    onSelect: ({ player, quality }) => {
-      entries.unshift({ number: player.number, action: ACTIONS[actionIndex], quality });
-      entries.length = Math.min(entries.length, 10); // höchstens 10 behalten
-      renderLog();
-    },
-  });
+function getMenu() {
+  if (!menu) {
+    menu = createRadialMenu({
+      getActionLabel: currentActionLabel,
+      // Mitte antippen -> nächste Aktion; nach der letzten wieder von vorn
+      onCenterTap: () => { actionIndex = (actionIndex + 1) % ACTIONS.length; },
+      onSelect: ({ player, quality }) => {
+        entries.unshift({ number: player.number, action: ACTIONS[actionIndex], quality });
+        entries.length = Math.min(entries.length, 10); // höchstens 10 behalten
+        renderLog();
+      },
+    });
+  }
+  return menu;
+}
+
+// Baut den Testbildschirm in "container" auf. Adresse: #/test
+export function renderRadialTest(container) {
+  const court = el("div", { id: "court", class: "court" });
 
   // Spielerkreise erzeugen
   for (const player of TEST_PLAYERS) {
-    const button = document.createElement("button");
-    button.className = "player";
-    button.textContent = player.number;
+    const button = el("button", { type: "button", class: "player" }, player.number);
     // Finger setzt auf -> Rad öffnen
     button.addEventListener("pointerdown", (event) => {
       event.preventDefault(); // verhindert Textauswahl/Scrollen beim Ziehen
-      menu.start(event, player);
+      getMenu().start(event, player);
     });
     court.appendChild(button);
   }
@@ -85,10 +95,19 @@ export function initRadialTest() {
   // Langes Drücken soll kein Kontextmenü des Browsers öffnen
   court.addEventListener("contextmenu", (event) => event.preventDefault());
 
-  renderLog();
-}
+  container.replaceChildren(
+    el("a", { class: "back-link", href: "#/" }, `← ${t("nav.teams")}`),
+    el("section", { class: "card" },
+      el("h2", {}, t("test.title")),
+      el("p", {}, t("test.hint")),
+      el("div", { class: "net" }),
+      court,
+    ),
+    el("section", { class: "card" },
+      el("h2", {}, t("test.logTitle")),
+      el("ol", { id: "log", class: "log" }),
+    ),
+  );
 
-// Nach einem Sprachwechsel die Liste in der neuen Sprache zeichnen.
-export function refreshRadialTestTexts() {
   renderLog();
 }
