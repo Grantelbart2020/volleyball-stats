@@ -53,12 +53,27 @@ export function t(key) {
   return translations[key] ?? key;
 }
 
+/*
+  Text mit Platzhaltern, z. B. "Satz {n} starten":
+    tf("set.start", { n: 2 })  ->  "Satz 2 starten"
+  Wie ein f-String in Python: f"Satz {n} starten".
+*/
+export function tf(key, values) {
+  return t(key).replace(/\{(\w+)\}/g, (whole, name) => (name in values ? String(values[name]) : whole));
+}
+
 // Setzt alle Texte auf der Seite neu.
 export function applyTranslations() {
   // querySelectorAll findet alle Elemente, die ein data-i18n-Attribut haben.
   document.querySelectorAll("[data-i18n]").forEach((element) => {
     const key = element.dataset.i18n; // liest data-i18n="..."
     element.textContent = t(key);
+  });
+  // Knöpfe nur mit Symbol (z. B. ⚙) bekommen ihre Beschriftung für Screenreader und Tooltip.
+  document.querySelectorAll("[data-i18n-label]").forEach((element) => {
+    const text = t(element.dataset.i18nLabel);
+    element.setAttribute("aria-label", text);
+    element.title = text;
   });
 }
 
