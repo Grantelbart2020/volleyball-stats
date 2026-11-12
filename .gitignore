@@ -1,0 +1,4 @@
+# Persönliche Dateien, die nur lokal auf dem PC liegen und nie zu GitHub sollen.
+# CLAUDE.md enthält Projektinfos für Claude Code (lokal übergeben).
+CLAUDE.md
+CLAUDE.local.md
