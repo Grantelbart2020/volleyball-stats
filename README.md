@@ -16,3 +16,4 @@ Am Handy in Chrome öffnen → Menü → „App installieren".
 - Meilenstein 0: Startseite, Sprache DE/EN, Hell/Dunkel
 - Meilenstein 1a: Kreismenü-Prototyp (Testbildschirm, noch ohne Speicherung)
 - Meilenstein 1b: installierbar (Manifest, Symbole) und offline (Service Worker)
+- Meilenstein 2: lokale Datenbank, Teams, Personen, Saison-Kader
