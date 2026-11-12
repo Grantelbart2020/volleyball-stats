@@ -1,0 +1,26 @@
+{
+  "app.title": "Volleyball Statistics",
+  "settings.switchLanguage": "EN",
+  "settings.themeLight": "Hell",
+  "settings.themeDark": "Dunkel",
+
+  "test.title": "Kreismenü-Test",
+  "test.hint": "Spieler antippen, in Richtung der Bewertung ziehen, loslassen. Oder kurz tippen: Das Rad bleibt offen, dann ein Segment antippen. Die Mitte wechselt die Aktion, ein Tipp außerhalb bricht ab.",
+  "test.logTitle": "Letzte Eingaben",
+  "test.logEmpty": "Noch keine Eingaben",
+
+  "action.serve": "Aufschlag",
+  "action.reception": "Annahme",
+  "action.set": "Zuspiel",
+  "action.attack": "Angriff",
+  "action.block": "Block",
+  "action.dig": "Abwehr",
+  "action.freeball": "Freeball",
+
+  "quality.perfect": "Perfekt / Punkt",
+  "quality.positive": "Positiv",
+  "quality.medium": "Mittel",
+  "quality.negative": "Negativ",
+  "quality.poor": "Sehr negativ",
+  "quality.error": "Fehler"
+}

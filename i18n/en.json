@@ -1,0 +1,26 @@
+{
+  "app.title": "Volleyball Statistics",
+  "settings.switchLanguage": "DE",
+  "settings.themeLight": "Light",
+  "settings.themeDark": "Dark",
+
+  "test.title": "Radial menu test",
+  "test.hint": "Touch a player, drag towards the rating, release. Or tap briefly: the wheel stays open, then tap a segment. The centre switches the action, a tap outside cancels.",
+  "test.logTitle": "Latest entries",
+  "test.logEmpty": "No entries yet",
+
+  "action.serve": "Serve",
+  "action.reception": "Reception",
+  "action.set": "Set",
+  "action.attack": "Attack",
+  "action.block": "Block",
+  "action.dig": "Dig",
+  "action.freeball": "Free ball",
+
+  "quality.perfect": "Perfect / point",
+  "quality.positive": "Positive",
+  "quality.medium": "Medium",
+  "quality.negative": "Negative",
+  "quality.poor": "Very negative",
+  "quality.error": "Error"
+}

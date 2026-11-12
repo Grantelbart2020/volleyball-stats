@@ -1,0 +1,236 @@
+/*
+  style.css – das Aussehen der App.
+
+  Wichtigste Idee: Alle Farben sind VARIABLEN (beginnen mit --).
+  Für "dunkel" und "hell" gibt es je einen Satz Werte.
+  Umschalten heißt nur: am <html>-Element data-theme ändern.
+*/
+
+/* ---------- Farben im dunklen Design (Standard) ---------- */
+:root[data-theme="dark"] {
+  --bg: #121417;          /* Hintergrund der Seite */
+  --surface: #1e2227;     /* Hintergrund von Karten/Kästen */
+  --text: #e8eaed;        /* normale Schrift */
+  --text-muted: #9aa0a6;  /* leise Schrift */
+  --border: #2f353c;      /* Rahmen */
+  --accent: #4f9cf9;      /* Akzentfarbe (Knöpfe) */
+}
+
+/* ---------- Farben im hellen Design ---------- */
+:root[data-theme="light"] {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --text: #1c1e21;
+  --text-muted: #5f6368;
+  --border: #d9dce1;
+  --accent: #1a6fd6;
+}
+
+/*
+  Farben der 6 Bewertungsstufen. Sie sind in beiden Designs gleich,
+  damit man sie im Spiel sofort wiedererkennt. (Werden ab Meilenstein 1 genutzt.)
+*/
+:root {
+  --q-perfect:  #1b7f3b; /* #  perfekt / Punkt  – dunkelgrün */
+  --q-positive: #6cc04a; /* +  positiv          – hellgrün   */
+  --q-medium:   #f2c94c; /* !  mittel           – gelb       */
+  --q-negative: #f2994a; /* -  negativ          – orange     */
+  --q-poor:     #e04646; /* /  sehr negativ     – rot        */
+  --q-error:    #6b6f76; /* =  Fehler           – grau       */
+}
+
+/* ---------- Grundlayout ---------- */
+* {
+  box-sizing: border-box; /* Breiten inklusive Rahmen rechnen – vermeidet Überraschungen */
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* Kopfzeile: Titel links, Knöpfe rechts */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.topbar-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+/* Knöpfe: groß genug für Finger (mind. 44px hoch) */
+.btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.btn:active {
+  border-color: var(--accent);
+}
+
+/* Hauptbereich */
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* Karte = ein Kasten mit Inhalt */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.card h2 {
+  margin-top: 0;
+}
+
+.card p {
+  color: var(--text-muted);
+}
+
+/* =====================================================================
+   Meilenstein 1a: Spielfeld, Spieler, Kreismenü, Eingabeliste
+   ===================================================================== */
+
+/* Netz als dicke Linie über dem Feld */
+.net {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--text-muted);
+  margin: 16px 0 12px;
+}
+
+/* Halbes Spielfeld: 3 Spalten, 2 Reihen (vorne 4-3-2, hinten 5-6-1) */
+.court {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px 12px;
+  justify-items: center;
+  padding: 8px 0 16px;
+  touch-action: none;   /* Browser soll beim Ziehen nicht scrollen oder zoomen */
+  user-select: none;    /* keine Textmarkierung beim Ziehen */
+  -webkit-user-select: none;
+}
+
+/* Spielerkreis: groß genug zum sicheren Treffen */
+.player {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* Overlay über dem ganzen Bildschirm, solange das Rad offen ist */
+.radial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.25);
+  touch-action: none;
+}
+
+.radial-overlay[hidden] {
+  display: none;
+}
+
+.radial-menu {
+  position: absolute;   /* left/top setzt radial-menu.js */
+  overflow: visible;
+}
+
+.radial-segment {
+  opacity: 0.8;
+  stroke: var(--bg);
+  stroke-width: 2;
+  transition: opacity 0.08s;
+}
+
+/* markiertes Segment: voll deckend mit hellem Rand */
+.radial-segment.active {
+  opacity: 1;
+  stroke: var(--text);
+  stroke-width: 4;
+}
+
+.radial-label {
+  fill: #ffffff;
+  font-size: 26px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  paint-order: stroke;          /* dunkler Umriss -> auch auf Gelb lesbar */
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 3px;
+}
+
+.radial-center {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 2;
+}
+
+.radial-center-text {
+  fill: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* Liste der letzten Eingaben */
+.log {
+  margin: 0;
+  padding-left: 24px;
+}
+
+.log li {
+  padding: 4px 0;
+}
+
+.log .log-empty {
+  list-style: none;
+  margin-left: -24px;
+  color: var(--text-muted);
+}
+
+.log-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+}
