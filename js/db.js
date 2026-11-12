@@ -14,13 +14,23 @@
                    -> eine Person bleibt über alle Saisons dieselbe (feste id)
     rosterEntries  { id, teamId, season, personId, number, createdAt, updatedAt }
                    -> Saison-Kader: "Person X spielt in Saison Y für Team Z mit Nummer N"
+  ab Version 2:
+    matches        { id, teamId, season, date, opponent, homeAway, competition, note,
+                     rules, ownSideTop, createdAt, updatedAt }
+                   -> ein Spiel; rules = Regelwerte für genau dieses Spiel
+    matchPlayers   { id, matchId, side, personId, number, name, isLibero, createdAt, updatedAt }
+                   -> Spielkader beider Teams. side "own": personId aus dem Saison-Kader,
+                      side "opp": Gegner mit Nummer und optionalem Namen
+    matchEvents    { id, matchId, seq, type, ..., createdAt }
+                   -> Ereignisse des Spiels der Reihe nach (seq = 1, 2, 3 ...),
+                      z. B. Satzstart, Punkt, Wechsel. Den Stand berechnet rules.js.
 
   Jeder Eintrag hat eine eindeutige id und Zeitstempel. Das brauchen wir
   später für Export/Import und einen möglichen Abgleich zwischen Geräten.
 */
 
 const DB_NAME = "vbstats";
-const DB_VERSION = 1; // bei Änderungen am Aufbau erhöhen (siehe onupgradeneeded)
+const DB_VERSION = 2; // bei Änderungen am Aufbau erhöhen (siehe onupgradeneeded)
 
 /* ---------- Hilfsfunktionen ---------- */
 
@@ -63,10 +73,29 @@ function openDb() {
           roster.createIndex("byTeamSeason", ["teamId", "season"]);
           roster.createIndex("byPerson", "personId");
         }
-        // Spätere Versionen: hier "if (event.oldVersion < 2) { ... }" ergänzen.
+        // Version 2 (Meilenstein 3): Spiele. Bestehende Teams und Kader bleiben unverändert.
+        if (event.oldVersion < 2) {
+          const matches = db.createObjectStore("matches", { keyPath: "id" });
+          matches.createIndex("byTeamSeason", ["teamId", "season"]);
+          const matchPlayers = db.createObjectStore("matchPlayers", { keyPath: "id" });
+          matchPlayers.createIndex("byMatch", "matchId");
+          const matchEvents = db.createObjectStore("matchEvents", { keyPath: "id" });
+          matchEvents.createIndex("byMatch", "matchId");
+        }
+        // Spätere Versionen: hier "if (event.oldVersion < 3) { ... }" ergänzen.
       };
 
-      request.onsuccess = () => resolve(request.result);
+      // Die App ist in einem anderen Tab noch mit der alten Version offen.
+      request.onblocked = () => {
+        console.warn("Datenbank-Update wartet: Bitte andere Tabs dieser App schließen.");
+      };
+
+      request.onsuccess = () => {
+        const db = request.result;
+        // Will ein neuerer Tab die Datenbank aktualisieren, geben wir sie frei.
+        db.onversionchange = () => db.close();
+        resolve(db);
+      };
       request.onerror = () => reject(request.error);
     });
   }
@@ -115,6 +144,18 @@ function teamRange(teamId) {
   return IDBKeyRange.bound([teamId, ""], [teamId, "￿"]);
 }
 
+// Löscht innerhalb einer Transaktion alle Einträge, die im Index zum Schlüssel passen.
+function deleteWhere(store, indexName, key) {
+  const cursorRequest = store.index(indexName).openCursor(key);
+  cursorRequest.onsuccess = () => {
+    const cursor = cursorRequest.result;
+    if (cursor) {
+      cursor.delete();
+      cursor.continue();
+    }
+  };
+}
+
 /* ---------- Dauerhafte Speicherung ---------- */
 
 /*
@@ -149,14 +190,18 @@ export async function saveTeam({ id, name }) {
   return team;
 }
 
-// Löscht ein Team und alle seine Kader-Einträge. Personen bleiben erhalten.
+// Löscht ein Team, seine Kader-Einträge und seine Spiele. Personen bleiben erhalten.
 export function deleteTeam(id) {
-  return run(["teams", "rosterEntries"], "readwrite", (s) => {
+  const stores = ["teams", "rosterEntries", "matches", "matchPlayers", "matchEvents"];
+  return run(stores, "readwrite", (s) => {
     s.teams.delete(id);
-    const cursorRequest = s.rosterEntries.index("byTeamSeason").openCursor(teamRange(id));
+    deleteWhere(s.rosterEntries, "byTeamSeason", teamRange(id));
+    const cursorRequest = s.matches.index("byTeamSeason").openCursor(teamRange(id));
     cursorRequest.onsuccess = () => {
       const cursor = cursorRequest.result;
       if (cursor) {
+        deleteWhere(s.matchPlayers, "byMatch", cursor.value.id);
+        deleteWhere(s.matchEvents, "byMatch", cursor.value.id);
         cursor.delete();
         cursor.continue();
       }
@@ -249,5 +294,115 @@ export async function copyRoster(teamId, fromSeason, toSeason) {
         createdAt: now(), updatedAt: now(),
       });
     }
+  });
+}
+
+/* ---------- Spiele ---------- */
+
+// Spiele eines Teams in einer Saison, neueste zuerst.
+export async function listMatches(teamId, season) {
+  const matches = await run("matches", "readonly", (s) =>
+    s.matches.index("byTeamSeason").getAll([teamId, season])
+  );
+  return matches.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export function getMatch(id) {
+  return run("matches", "readonly", (s) => s.matches.get(id));
+}
+
+// Legt ein Spiel an (ohne id) oder ändert es (mit id). Gibt das Spiel zurück.
+export async function saveMatch(data) {
+  const existing = data.id ? await getMatch(data.id) : null;
+  const match = existing
+    ? { ...existing, ...data, updatedAt: now() }
+    : { ownSideTop: false, ...data, id: newId(), createdAt: now(), updatedAt: now() };
+  await run("matches", "readwrite", (s) => s.matches.put(match));
+  return match;
+}
+
+// Löscht ein Spiel mit Spielkader und allen Ereignissen.
+export function deleteMatch(id) {
+  return run(["matches", "matchPlayers", "matchEvents"], "readwrite", (s) => {
+    s.matches.delete(id);
+    deleteWhere(s.matchPlayers, "byMatch", id);
+    deleteWhere(s.matchEvents, "byMatch", id);
+  });
+}
+
+/* ---------- Spielkader (beide Teams) ---------- */
+
+/*
+  Spielkader eines Spiels, nach Nummer sortiert.
+  Eigene Spieler bekommen "name" aus der Person, Gegner haben ihren Namen selbst.
+*/
+export async function listMatchPlayers(matchId) {
+  const { players, persons } = await run(["matchPlayers", "persons"], "readonly", (s) => ({
+    players: s.matchPlayers.index("byMatch").getAll(matchId),
+    persons: s.persons.getAll(),
+  }));
+  const personById = new Map(persons.map((p) => [p.id, p]));
+  return players
+    .map((p) => (p.side === "own" ? { ...p, name: personById.get(p.personId)?.name ?? "?" } : p))
+    .sort((a, b) => a.number - b.number);
+}
+
+// Fügt einen Spieler zum Spielkader hinzu: { matchId, side, personId, number, name, isLibero }
+export async function addMatchPlayer(data) {
+  const player = {
+    personId: null, name: "", isLibero: false, ...data,
+    id: newId(), createdAt: now(), updatedAt: now(),
+  };
+  // Bei eigenen Spielern steht der Name an der Person, nicht doppelt hier.
+  if (player.side === "own") delete player.name;
+  await run("matchPlayers", "readwrite", (s) => s.matchPlayers.add(player));
+  return player;
+}
+
+// Ändert z. B. isLibero. Nur die gespeicherten Felder übernehmen (kein "name" bei eigenen).
+export async function updateMatchPlayer(id, changes) {
+  const existing = await run("matchPlayers", "readonly", (s) => s.matchPlayers.get(id));
+  if (!existing) return;
+  const updated = { ...existing, ...changes, updatedAt: now() };
+  if (updated.side === "own") delete updated.name;
+  await run("matchPlayers", "readwrite", (s) => s.matchPlayers.put(updated));
+}
+
+export function removeMatchPlayer(id) {
+  return run("matchPlayers", "readwrite", (s) => s.matchPlayers.delete(id));
+}
+
+/* ---------- Ereignisse eines Spiels ---------- */
+
+export async function listMatchEvents(matchId) {
+  const events = await run("matchEvents", "readonly", (s) =>
+    s.matchEvents.index("byMatch").getAll(matchId)
+  );
+  return events.sort((a, b) => a.seq - b.seq);
+}
+
+/*
+  Hängt ein Ereignis hinten an. Die laufende Nummer (seq) wird in derselben
+  Transaktion bestimmt, damit sie sicher eindeutig ist.
+*/
+export function addMatchEvent(matchId, data) {
+  return run("matchEvents", "readwrite", (s) => {
+    const request = s.matchEvents.index("byMatch").getAll(matchId);
+    request.onsuccess = () => {
+      const maxSeq = request.result.reduce((max, e) => Math.max(max, e.seq), 0);
+      s.matchEvents.add({ ...data, matchId, seq: maxSeq + 1, id: newId(), createdAt: now() });
+    };
+  });
+}
+
+// "Rückgängig": löscht das letzte Ereignis des Spiels.
+export function deleteLastMatchEvent(matchId) {
+  return run("matchEvents", "readwrite", (s) => {
+    const request = s.matchEvents.index("byMatch").getAll(matchId);
+    request.onsuccess = () => {
+      if (!request.result.length) return;
+      const last = request.result.reduce((a, b) => (b.seq > a.seq ? b : a));
+      s.matchEvents.delete(last.id);
+    };
   });
 }

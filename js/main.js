@@ -12,35 +12,18 @@
 import { loadLanguage, applyTranslations, getLanguage, t } from "./i18n.js";
 import { el } from "./dom.js";
 import { requestPersistentStorage } from "./db.js";
+import { readSetting, saveSetting } from "./settings.js";
 import { renderTeams } from "./screen-teams.js";
 import { renderTeam } from "./screen-team.js";
+import { renderMatchForm } from "./screen-match-form.js";
+import { renderMatch } from "./screen-match.js";
+import { renderSettings } from "./screen-settings.js";
 import { renderRadialTest } from "./radial-test.js";
 
 // Namen, unter denen die Einstellungen im Browser gespeichert werden.
+// (Hinweis: Hier liegen nur Einstellungen. Die Daten liegen in der Datenbank, db.js.)
 const STORAGE_KEY_LANGUAGE = "vbstats.language";
 const STORAGE_KEY_THEME = "vbstats.theme";
-
-/*
-  Kleine Hilfsfunktionen für localStorage (ein einfacher Schlüssel-Wert-Speicher
-  im Browser). Er kann in seltenen Fällen fehlen oder blockiert sein –
-  try/catch fängt das ab, damit die App trotzdem läuft.
-  Hinweis: Hier liegen nur Einstellungen. Die Daten liegen in der Datenbank (db.js).
-*/
-function readSetting(key) {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function saveSetting(key, value) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Speichern nicht möglich – Einstellung gilt dann nur bis zum Neuladen.
-  }
-}
 
 /* ---------- Design (hell/dunkel) ---------- */
 
@@ -58,18 +41,33 @@ function applyTheme(theme) {
 /*
   Der Bildschirm steht im Teil der Adresse nach dem "#":
     #/              -> Teamliste
-    #/team/<id>     -> ein Team mit Kader
+    #/team/<id>     -> ein Team mit Kader und Spielen
+    #/team/<id>/match/new -> neues Spiel anlegen
+    #/match/<id>    -> ein Spiel (Kader, Satz starten, Spielstand)
+    #/match/<id>/edit -> Spielangaben ändern
+    #/settings      -> Einstellungen
     #/test          -> Kreismenü-Test
   Vorteil: Der Zurück-Knopf des Browsers bzw. Handys funktioniert ganz normal.
+
+  /^...$/.exec(hash) prüft die Adresse mit einem "regulären Ausdruck" (wie re.match
+  in Python). ([\w-]+) fängt die id ein, sie steht danach in route[1].
 */
 const app = document.getElementById("app");
 
 async function renderRoute() {
   const hash = location.hash || "#/";
+  let route;
   try {
-    const teamMatch = /^#\/team\/([\w-]+)$/.exec(hash);
-    if (teamMatch) {
-      await renderTeam(app, teamMatch[1]);
+    if ((route = /^#\/team\/([\w-]+)$/.exec(hash))) {
+      await renderTeam(app, route[1]);
+    } else if ((route = /^#\/team\/([\w-]+)\/match\/new$/.exec(hash))) {
+      await renderMatchForm(app, { teamId: route[1] });
+    } else if ((route = /^#\/match\/([\w-]+)\/edit$/.exec(hash))) {
+      await renderMatchForm(app, { matchId: route[1] });
+    } else if ((route = /^#\/match\/([\w-]+)$/.exec(hash))) {
+      await renderMatch(app, route[1]);
+    } else if (hash === "#/settings") {
+      renderSettings(app);
     } else if (hash === "#/test") {
       renderRadialTest(app);
     } else {

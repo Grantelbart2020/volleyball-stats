@@ -1,10 +1,12 @@
 /*
-  screen-team.js – ein Team: umbenennen, löschen, Saison wählen, Kader pflegen.
+  screen-team.js – ein Team: umbenennen, löschen, Saison wählen, Spiele, Kader pflegen.
   Adresse: #/team/<id>
 */
 import { el, confirmButton, showError } from "./dom.js";
 import { t } from "./i18n.js";
 import * as db from "./db.js";
+import { computeMatch, seasonForDate } from "./rules.js";
+import { formatDate, matchResultText } from "./match-format.js";
 
 // Merkt sich pro Team die gewählte Saison, solange die App offen ist.
 const selectedSeasonByTeam = new Map();
@@ -12,14 +14,9 @@ const selectedSeasonByTeam = new Map();
 // Welcher Kader-Eintrag gerade bearbeitet wird (null = keiner).
 let editingEntryId = null;
 
-/*
-  Aktuelle Saison, z. B. "2026/27".
-  Annahme: Eine Saison beginnt im Juli. Vorher gilt noch die Vorjahressaison.
-*/
+// Aktuelle Saison, z. B. "2026/27" (Beginn im Juli, siehe rules.js).
 function currentSeason() {
-  const date = new Date();
-  const startYear = date.getMonth() >= 6 ? date.getFullYear() : date.getFullYear() - 1; // Monat 6 = Juli
-  return `${startYear}/${String((startYear + 1) % 100).padStart(2, "0")}`;
+  return seasonForDate(new Date());
 }
 
 // Prüft eine eingegebene Saison wie "2027/28" (zweites Jahr = erstes + 1).
@@ -52,12 +49,36 @@ export async function renderTeam(container, teamId) {
 
   const roster = await db.listRoster(teamId, season);
   const persons = await db.listPersons();
+  const matches = await db.listMatches(teamId, season);
+  // Für das Ergebnis (z. B. 3:1) braucht jedes Spiel seine Ereignisse.
+  const results = await Promise.all(matches.map(async (match) =>
+    computeMatch(match.rules, [], await db.listMatchEvents(match.id))));
 
   container.replaceChildren(
     backLink,
     teamHeaderCard(team, rerender),
     seasonCard(teamId, season, allSeasons, roster, rerender),
+    matchesCard(teamId, season, matches, results),
     rosterCard(teamId, season, roster, persons, rerender),
+  );
+}
+
+/* ---------- Karte: Spiele dieser Saison ---------- */
+
+function matchesCard(teamId, season, matches, results) {
+  const list = matches.length
+    ? el("ul", { class: "list" }, matches.map((match, i) =>
+        el("li", {}, el("a", { class: "list-link match-link", href: `#/match/${match.id}` },
+          el("span", {}, match.opponent),
+          el("span", { class: "muted small" }, formatDate(match.date)),
+          el("span", { class: "match-result" }, matchResultText(results[i])),
+        ))))
+    : el("p", { class: "muted" }, t("matches.empty"));
+
+  return el("section", { class: "card" },
+    el("h3", {}, `${t("matches.title")} ${season}`),
+    list,
+    el("a", { class: "btn btn-primary", href: `#/team/${teamId}/match/new` }, t("match.new")),
   );
 }
 

@@ -2,3 +2,5 @@
 # CLAUDE.md enthält Projektinfos für Claude Code (lokal übergeben).
 CLAUDE.md
 CLAUDE.local.md
+# Testserver-Einstellung für Claude Code (nur lokal)
+.claude/launch.json

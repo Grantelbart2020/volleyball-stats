@@ -419,3 +419,355 @@ select:focus {
 .roster-row .row-actions {
   margin-left: auto;
 }
+
+/* =====================================================================
+   Meilenstein 3: Spiel, Satz, Aufstellung, Wechsel
+   ===================================================================== */
+
+/* Farben für Hinweise und Hervorhebungen (in beiden Designs lesbar) */
+:root[data-theme="dark"] {
+  color-scheme: dark;    /* Browser-eigene Teile (z. B. Kalender-Symbol) passend hell zeichnen */
+  --warning: #f2c94c;
+  --ok: #6cc04a;
+  --libero: #f2994a;     /* Libero hat ein andersfarbiges Trikot */
+  --highlight: #263447;  /* Hintergrund für Vorschläge */
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --warning: #9a6a00;
+  --ok: #1b7f3b;
+  --libero: #c25e00;
+  --highlight: #e6f0fd;
+}
+
+.small {
+  font-size: 0.875rem;
+}
+
+.center {
+  text-align: center;
+}
+
+.form-warning {
+  color: var(--warning);
+  margin: 8px 0 0;
+}
+
+.form-ok {
+  color: var(--ok);
+  margin: 8px 0 0;
+}
+
+/* Elemente untereinander mit gleichmäßigem Abstand */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stack > h3 {
+  margin: 8px 0 0;
+}
+
+/* Zahnrad-Knopf in der Kopfzeile */
+.btn-icon {
+  justify-content: center;
+  padding: 0 12px;
+  font-size: 1.2rem;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-big {
+  min-height: 56px;
+  flex: 1 1 140px;
+  font-weight: 600;
+}
+
+/* Datum und Notiz sehen aus wie die anderen Eingabefelder */
+input[type="datetime-local"],
+textarea {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+
+input[type="datetime-local"]:focus,
+textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.rule-grid input[type="text"].input-number {
+  width: 72px;
+  text-align: center;
+}
+
+/* Regelwerte: Text links, Zahl rechts */
+.rule-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.rule-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+details summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+}
+
+/* Spielliste auf der Team-Seite */
+.match-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.match-result {
+  margin-left: auto;
+  font-weight: 400;
+}
+
+.match-summary {
+  color: var(--text);
+}
+
+/* Checkbox mit Text in einer Zeile (Spielkader) */
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.checkbox-inline input {
+  width: 20px;
+  height: 20px;
+}
+
+.grow {
+  flex: 1 1 200px;
+}
+
+/* Kleine Kästchen nebeneinander (Libero-Partner, Gegnernummern, Auswahlknöpfe) */
+.chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--bg);
+}
+
+/* Aufstellung eingeben: 3 Spalten wie auf dem Feld */
+.lineup-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.lineup-grid select {
+  width: 100%;
+}
+
+/* Rückgängig */
+.undo-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 16px;
+}
+
+/* Verlauf */
+.history {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.history li {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.history-score {
+  display: inline-block;
+  min-width: 56px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* ---------- Laufender Satz ---------- */
+
+.scoreboard {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.score-team {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+.score-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.score-points {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-serve {
+  font-size: 0.8rem;
+}
+
+.score-sep {
+  font-size: 2rem;
+  color: var(--text-muted);
+}
+
+.court-label {
+  text-align: center;
+  font-weight: 600;
+  margin: 4px 0;
+}
+
+/* Feldhälfte: 3 Spalten, 2 Reihen */
+.lineup-court {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.court-spot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 72px;
+  padding: 4px;
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  background: var(--bg);
+  min-width: 0;
+}
+
+.court-spot.libero {
+  border-color: var(--libero);
+}
+
+.court-spot.server {
+  box-shadow: 0 0 0 3px var(--warning);
+}
+
+.spot-pos {
+  position: absolute;
+  top: 2px;
+  left: 6px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.spot-serve {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  font-size: 0.8rem;
+}
+
+.spot-number {
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.spot-name {
+  max-width: 100%;
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.live .net {
+  margin: 4px 0;
+}
+
+.point-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Libero-Vorschlag */
+.suggestion {
+  padding: 12px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--highlight);
+}
+
+.suggestion p {
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.suggestion.mandatory {
+  border-color: var(--warning);
+  border-width: 2px;
+}
+
+/* Auswahlbereich für Wechsel und Libero */
+.panel {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.panel p {
+  margin: 0 0 8px;
+}
