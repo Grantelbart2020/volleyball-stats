@@ -82,6 +82,25 @@ async function start() {
   });
 }
 
+/* ---------- Offline-Fähigkeit (Service Worker) ---------- */
+
+/*
+  Den Service Worker nur auf der echten Adresse (GitHub Pages, https) anmelden,
+  NICHT beim Entwickeln mit Live Server. Sonst würde er alte Dateien aus dem
+  Cache zeigen und deine Änderungen wären erst nach dem zweiten Neuladen sichtbar.
+*/
+function registerServiceWorker() {
+  const isDevelopment = ["localhost", "127.0.0.1"].includes(location.hostname);
+  if (!("serviceWorker" in navigator) || isDevelopment || location.protocol !== "https:") {
+    return;
+  }
+  navigator.serviceWorker.register("service-worker.js").catch((error) => {
+    console.error("Service Worker konnte nicht angemeldet werden:", error);
+  });
+}
+
+registerServiceWorker();
+
 // start() aufrufen. Geht etwas schief, steht der Fehler in der Browser-Konsole (F12).
 start().catch((error) => {
   console.error("Fehler beim Start der App:", error);
