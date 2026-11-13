@@ -13,6 +13,7 @@ import {
   OWN, OPP, defaultRules, seasonForDate, checkOwnRoster, isDecidingSet, pointsToWin,
   setWinner, suggestedFirstServe, rotate, lineupError, computeMatch, setStartError,
   validLiberoSwaps, suggestLiberoSwap, liberoSwapError, rallyError, substitutionError, eventError,
+  touchOutcome, suggestPoint, suggestAction, touchError,
 } from "../js/rules.js";
 
 const rules = defaultRules();
@@ -232,4 +233,89 @@ test("Eingewechselter übernimmt die Libero-Partnerschaft", () => {
   const s = state([setStart(1, OWN), sub("o6", "o7")]).activeSet;
   assert.deepEqual(s.teams.own.partners, ["o3", "o7"]);
   assert.equal(s.teams.own.subCount, 1);
+});
+
+/* ---------- Ballberührungen ---------- */
+
+// Berührung: team, Spieler, Aktion, Bewertungscode
+const touch = (team, playerId, action, quality) => ({ type: "touch", team, playerId, action, quality });
+const oppTeamIds = oppIds;
+
+test("Berührungen sammeln sich im Ballwechsel, ein Punkt leert ihn", () => {
+  const events = [setStart(1, OPP), touch(OPP, null, "serve", "+"), touch(OWN, "o5", "reception", "!")];
+  const s = state(events).activeSet;
+  assert.equal(s.rally.length, 2);
+  assert.deepEqual(s.rally[1], { team: OWN, playerId: "o5", action: "reception", quality: "!" });
+  assert.deepEqual(s.score, { own: 0, opp: 0 }); // Berührungen ändern den Spielstand nicht
+  const after = state([...events, point(OWN)]).activeSet;
+  assert.deepEqual(after.rally, []);
+  assert.equal(after.rallies, 1);
+});
+
+test("Punktvorschlag: Ass, Angriffs- und Blockpunkt, Fehler", () => {
+  assert.equal(touchOutcome({ team: OWN, action: "serve", quality: "#" }), OWN);
+  assert.equal(touchOutcome({ team: OWN, action: "attack", quality: "#" }), OWN);
+  assert.equal(touchOutcome({ team: OPP, action: "block", quality: "#" }), OPP);
+  assert.equal(touchOutcome({ team: OWN, action: "reception", quality: "=" }), OPP);
+  assert.equal(touchOutcome({ team: OPP, action: "attack", quality: "=" }), OWN);
+  assert.equal(touchOutcome({ team: OWN, action: "reception", quality: "#" }), null); // perfekte Annahme: weiter
+  assert.equal(touchOutcome({ team: OWN, action: "attack", quality: "+" }), null);
+
+  const s = state([setStart(1, OWN), touch(OWN, "o1", "serve", "#")]).activeSet;
+  assert.equal(suggestPoint(s).winner, OWN);
+  assert.equal(suggestPoint(state([setStart(1, OWN)]).activeSet), null);
+});
+
+test("Aktionsvorschlag folgt dem Ballwechsel", () => {
+  const base = [setStart(1, OPP)];
+  const at = (events) => state([...base, ...events]).activeSet;
+  // Gegner schlägt auf: wir nehmen an
+  assert.equal(suggestAction(at([]), OPP, null), "serve");
+  assert.equal(suggestAction(at([]), OWN, "o5"), "reception");
+  const afterServe = [touch(OPP, null, "serve", "+")];
+  assert.equal(suggestAction(at(afterServe), OWN, "o5"), "reception");
+  const afterRec = [...afterServe, touch(OWN, "o5", "reception", "+")];
+  assert.equal(suggestAction(at(afterRec), OWN, "o3"), "set");
+  const afterSet = [...afterRec, touch(OWN, "o3", "set", "+")];
+  assert.equal(suggestAction(at(afterSet), OWN, "o4"), "attack");
+  // Gegnerischer Angriff: vorne Block, hinten Abwehr
+  const oppAttack = [...afterServe, touch(OWN, "o5", "reception", "-"), touch(OWN, "o4", "freeball", "!"),
+    touch(OPP, null, "attack", "+")];
+  assert.equal(suggestAction(at(oppAttack), OWN, "o2"), "block"); // o2 steht auf Position 2 (vorne)
+  assert.equal(suggestAction(at(oppAttack), OWN, "o6"), "dig");   // o6 steht auf Position 6 (hinten)
+  // Ball kommt "frei" herüber (z. B. nach gegnerischem Zuspiel): Freeball
+  const oppSet = [...afterServe, touch(OWN, "o5", "reception", "-"), touch(OPP, null, "set", "!")];
+  assert.equal(suggestAction(at(oppSet), OWN, "o6"), "freeball");
+});
+
+test("Berührung prüfen", () => {
+  const s = state([setStart(1, OWN)]).activeSet;
+  const check = (t, set = s) => touchError(set, t, t.team === OWN ? ownTeamIds : oppTeamIds);
+  assert.equal(check(touch(OWN, "o1", "serve", "+")), null);
+  assert.equal(check(touch(OWN, "o2", "serve", "+")), "notServer");   // nur Position 1 schlägt auf
+  assert.equal(check(touch(OPP, null, "serve", "+")), "notServing");
+  assert.equal(check(touch(OWN, "o7", "dig", "+")), "notOnCourt");    // o7 sitzt auf der Bank
+  assert.equal(check(touch(OPP, null, "dig", "+")), null);            // Gegner ohne Aufstellung: Mannschaft
+  assert.equal(check(touch(OPP, "g3", "dig", "+")), null);            // ... oder Spieler aus dem Kader
+  assert.equal(check(touch(OPP, "x9", "dig", "+")), "notInRoster");
+  assert.equal(check(touch(OWN, "o2", "jump", "+")), "unknownAction");
+  assert.equal(check(touch(OWN, "o2", "dig", "?")), "unknownQuality");
+
+  const served = state([setStart(1, OWN), touch(OWN, "o1", "serve", "+")]).activeSet;
+  assert.equal(check(touch(OWN, "o1", "serve", "+"), served), "serveNotFirst");
+  // Nach einem Ass ist der Ballwechsel entschieden: erst den Punkt eintragen
+  const ace = state([setStart(1, OWN), touch(OWN, "o1", "serve", "#")]).activeSet;
+  assert.equal(check(touch(OPP, null, "reception", "="), ace), "rallyDecided");
+  // Über eventError (wie beim Speichern)
+  assert.equal(eventError(state([setStart(1, OWN)]), touch(OWN, "o1", "serve", "+"), players, rules), null);
+});
+
+test("Wechsel und Libero-Tausch nur zwischen den Ballwechseln", () => {
+  const events = [setStart(1, OPP), touch(OPP, null, "serve", "+")];
+  const s = state(events).activeSet;
+  assert.equal(substitutionError(s, OWN, { outId: "o2", inId: "o7" }, rules, ownTeamIds), "rallyRunning");
+  assert.deepEqual(validLiberoSwaps(s, OWN), []);
+  assert.equal(suggestLiberoSwap(s, OWN), null);
+  const after = state([...events, point(OPP)]).activeSet;
+  assert.equal(substitutionError(after, OWN, { outId: "o2", inId: "o7" }, rules, ownTeamIds), null);
 });

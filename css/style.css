@@ -692,6 +692,45 @@ details summary {
   border-radius: 12px;
   background: var(--bg);
   min-width: 0;
+  /* Knopf zum Antippen: Schrift wie die Seite, kein Scrollen/Markieren beim Ziehen */
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Gesperrt (z. B. Punkt noch nicht eingetragen): blasser, nicht antippbar */
+.court-spot:disabled,
+.chip-touch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Spieler/Mannschaft antippen, wenn keine Aufstellung erfasst ist */
+.chip-touch {
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.chip-team {
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+/* Laufender Ballwechsel: Berührungen der Reihe nach */
+.rally {
+  margin: 0;
+  padding-left: 24px;
+}
+
+.rally li {
+  padding: 2px 0;
 }
 
 .court-spot.libero {

@@ -20,5 +20,10 @@ export const QUALITIES = [
   { code: "=", id: "error",    symbol: "⚠", color: "var(--q-error)" },
 ];
 
+// Stufe zu einem Standardcode, z. B. "#" -> { id: "perfect", ... }
+export function qualityByCode(code) {
+  return QUALITIES.find((q) => q.code === code) ?? null;
+}
+
 // Die sieben Aktionen. Der Text dazu steht in den Sprachdateien unter "action.<name>".
 export const ACTIONS = ["serve", "reception", "set", "attack", "block", "dig", "freeball"];

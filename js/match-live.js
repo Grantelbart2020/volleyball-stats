@@ -1,7 +1,7 @@
 /*
   match-live.js – der laufende Satz: Spielstand, Spielfeld mit Aufstellung,
-  Punkte (vorläufige Knöpfe bis Meilenstein 4), Auswechslung, Libero-Tausch,
-  Seiten tauschen.
+  Ballberührungen (Spieler antippen -> Kreismenü), laufender Ballwechsel,
+  Punkt (Vorschlag oder Knopf), Auswechslung, Libero-Tausch, Seiten tauschen.
 
   Alle Regeln kommen aus rules.js. Hier wird nur angezeigt und das passende
   Ereignis gespeichert (ctx.addEvent).
@@ -10,9 +10,55 @@ import { el, showError } from "./dom.js";
 import { t, tf } from "./i18n.js";
 import * as db from "./db.js";
 import {
-  OWN, OPP, TEAMS, otherTeam, rallyError, substitutionError, suggestLiberoSwap, validLiberoSwaps,
+  OWN, OPP, TEAMS, otherTeam, rallyError, substitutionError, suggestAction, suggestLiberoSwap,
+  suggestPoint, validLiberoSwaps,
 } from "./rules.js";
-import { playerLabel } from "./match-format.js";
+import { ACTIONS, qualityByCode } from "./ratings.js";
+import { createRadialMenu } from "./radial-menu.js";
+import { playerLabel, touchText } from "./match-format.js";
+
+/* ---------- Kreismenü für die Ballberührung ---------- */
+
+/*
+  Das Kreismenü wird nur EINMAL erzeugt (es hängt am <body>) und bei jedem
+  Antippen wiederverwendet. "touchDraft" merkt sich, wer gerade angetippt wurde
+  und welche Aktion in der Mitte steht:
+    { ctx, team, playerId, action }
+*/
+let menu = null;
+let touchDraft = null;
+
+function getMenu() {
+  if (!menu) {
+    menu = createRadialMenu({
+      getActionLabel: () => (touchDraft ? t(`action.${touchDraft.action}`) : ""),
+      // Mitte antippen -> nächste Aktion; nach der letzten wieder von vorn
+      onCenterTap: () => {
+        const next = (ACTIONS.indexOf(touchDraft.action) + 1) % ACTIONS.length;
+        touchDraft.action = ACTIONS[next];
+      },
+      onSelect: ({ quality }) => {
+        const { ctx, team, playerId, action } = touchDraft;
+        touchDraft = null;
+        ctx.addEvent({ type: "touch", team, playerId, action, quality: quality.code });
+      },
+    });
+  }
+  return menu;
+}
+
+// Finger setzt auf einem Spieler (oder "Mannschaft") auf -> Kreismenü mit Aktionsvorschlag
+function startTouch(event, ctx, team, playerId) {
+  event.preventDefault(); // verhindert Textauswahl/Scrollen beim Ziehen
+  const set = ctx.state.activeSet;
+  touchDraft = { ctx, team, playerId, action: suggestAction(set, team, playerId) };
+  getMenu().start(event, { team, playerId });
+}
+
+// Darf gerade eine Berührung erfasst werden? (nicht bei Libero-Pflicht oder entschiedenem Ballwechsel)
+function touchBlocked(set) {
+  return Boolean(rallyError(set) || suggestPoint(set));
+}
 
 /*
   Was gerade geöffnet ist (bleibt beim Neuzeichnen erhalten):
@@ -44,6 +90,8 @@ export function liveCard(ctx) {
     courtHalf(ctx, set, otherTeam(topTeam), false),
     TEAMS.map((team) => suggestionBox(ctx, set, team)),
     blocker === "liberoMustExit" && el("p", { class: "form-warning" }, t("live.liberoBlocks")),
+    rallyView(ctx, set),
+    pointSuggestion(ctx, set),
     pointButtons,
     el("p", { class: "muted small" }, t("live.pointHint")),
     actionButtons(ctx, set),
@@ -78,13 +126,24 @@ function scoreboard(ctx, set) {
 function courtHalf(ctx, set, team, top) {
   const ts = set.teams[team];
   const label = el("div", { class: "court-label" }, ctx.names[team]);
+  const blocked = touchBlocked(set);
+  // Antippen startet das Kreismenü (pointerdown = Finger oder Maus drückt)
+  const tapHandler = (playerId) => (event) => { if (!blocked) startTouch(event, ctx, team, playerId); };
 
   if (!ts.lineup) {
-    const players = ctx.players.filter((p) => p.side === team);
+    // Ohne Aufstellung: "Mannschaft" antippen, bei einzelnen Gegnerspielern auch den Spieler
+    const players = ctx.settings.opponentMode === "players" ? ctx.players.filter((p) => p.side === team) : [];
     return el("div", { class: "court-half" },
       label,
       el("p", { class: "muted small" }, t("live.noLineup")),
-      el("div", { class: "chip-list" }, players.map((p) => el("span", { class: "chip" }, playerLabel(p)))),
+      el("div", { class: "chip-list touch-list" },
+        el("button", {
+          type: "button", class: "chip chip-touch chip-team", disabled: blocked, onPointerdown: tapHandler(null),
+        }, tf("live.wholeTeam", { team: ctx.names[team] })),
+        players.map((p) => el("button", {
+          type: "button", class: "chip chip-touch", disabled: blocked, onPointerdown: tapHandler(p.id),
+        }, playerLabel(p))),
+      ),
     );
   }
 
@@ -93,7 +152,7 @@ function courtHalf(ctx, set, team, top) {
     const player = ctx.playerById.get(ts.lineup[index]);
     const isServer = index === 0 && set.serving === team;
     const classes = ["court-spot", player?.isLibero && "libero", isServer && "server"].filter(Boolean).join(" ");
-    return el("div", { class: classes },
+    return el("button", { type: "button", class: classes, disabled: blocked, onPointerdown: tapHandler(ts.lineup[index]) },
       el("span", { class: "spot-pos" }, index + 1),
       el("span", { class: "spot-number" }, player?.number ?? "?"),
       el("span", { class: "spot-name" }, player?.name ?? ""),
@@ -105,6 +164,40 @@ function courtHalf(ctx, set, team, top) {
     top && label,
     el("div", { class: "lineup-court" }, spots),
     !top && label,
+  );
+}
+
+/* ---------- Laufender Ballwechsel und Punktvorschlag ---------- */
+
+// Die Berührungen des laufenden Ballwechsels, der Reihe nach, mit Farbe der Bewertung.
+function rallyView(ctx, set) {
+  if (!set.rally.length) {
+    return el("p", { class: "muted small" }, t(set.serving === OWN ? "live.tapServer" : "live.tapStart"));
+  }
+  return el("ol", { class: "rally" }, set.rally.map((touch) =>
+    el("li", {},
+      el("span", { class: "log-dot", style: `background: ${qualityByCode(touch.quality)?.color ?? "transparent"}` }),
+      touchText(touch, ctx.names, ctx.playerById),
+    )));
+}
+
+/*
+  Hat die letzte Berührung den Ballwechsel entschieden (Ass, Angriffspunkt,
+  Fehler ...), schlägt die App den Punkt vor. Weitere Berührungen sind bis
+  dahin gesperrt. War die Bewertung falsch: "Rückgängig".
+*/
+function pointSuggestion(ctx, set) {
+  const suggestion = suggestPoint(set);
+  if (!suggestion || rallyError(set)) return null;
+  return el("div", { class: "suggestion" },
+    el("p", {}, tf("live.pointSuggest", { team: ctx.names[suggestion.winner] })),
+    el("div", { class: "row-actions" },
+      el("button", {
+        type: "button", class: "btn btn-primary",
+        onClick: () => ctx.addEvent({ type: "point", winner: suggestion.winner }),
+      }, t("common.ok")),
+    ),
+    el("p", { class: "muted small" }, t("live.pointSuggestHint")),
   );
 }
 
@@ -152,7 +245,8 @@ function actionButtons(ctx, set) {
   for (const team of TEAMS) {
     const ts = set.teams[team];
     if (!ts.lineup) continue; // ohne Aufstellung keine Wechsel
-    buttons.push(el("button", { type: "button", class: "btn", onClick: open("sub", team) },
+    // Wechsel nur zwischen den Ballwechseln
+    buttons.push(el("button", { type: "button", class: "btn", disabled: set.rally.length > 0, onClick: open("sub", team) },
       tf("live.subButton", { team: ctx.names[team], count: ts.subCount, max: ctx.match.rules.maxSubstitutions })));
     if (validLiberoSwaps(set, team).length) {
       buttons.push(el("button", { type: "button", class: "btn", onClick: open("libero", team) },

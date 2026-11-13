@@ -44,6 +44,11 @@ async function saveEvent(match, players, event) {
     data.setNumber = state.activeSet.number;
     data.score = { ...applyEvent(state.activeSet, data).score };
   }
+  if (data.type === "touch") {
+    // Laufende Nummern für die Auswertung: Ballwechsel im Satz, Berührung im Ballwechsel
+    data.rally = state.activeSet.rallies + 1;
+    data.touchNo = state.activeSet.rally.length + 1;
+  }
   await db.addMatchEvent(match.id, data);
   return null;
 }
@@ -101,7 +106,7 @@ export async function renderMatch(container, matchId) {
 function usedPlayerIds(events) {
   const ids = new Set();
   for (const e of events) {
-    for (const id of [...(e.lineup?.own ?? []), ...(e.lineup?.opp ?? []), e.outId, e.inId]) {
+    for (const id of [...(e.lineup?.own ?? []), ...(e.lineup?.opp ?? []), e.outId, e.inId, e.playerId]) {
       if (id) ids.add(id);
     }
   }
