@@ -312,6 +312,8 @@
   "roster.transferButton": "Move",
   "error.alreadyInTeam": "This person is already in the target team's roster for this season.",
   "match.report": "Match report",
+  "match.continueLive": "Live entry",
+  "live.menu": "Match",
   "report.title": "Match report",
   "report.backToMatch": "Back to match",
   "report.scope": "Report for",

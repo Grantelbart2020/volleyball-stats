@@ -45,6 +45,7 @@ function applyTheme(theme) {
     #/team/<id>     -> ein Team mit Kader und Spielen
     #/team/<id>/match/new -> neues Spiel anlegen
     #/match/<id>    -> ein Spiel (Kader, Satz starten, Spielstand)
+    #/match/<id>/live -> Live-Eingabe, solange ein Satz läuft
     #/match/<id>/edit -> Spielangaben ändern
     #/match/<id>/report -> Spielbericht (zum Drucken als PDF)
     #/settings      -> Einstellungen
@@ -59,6 +60,8 @@ const app = document.getElementById("app");
 async function renderRoute() {
   const hash = location.hash || "#/";
   let route;
+  // Live-Ansicht (ohne Kopfzeile, ohne Scrollen) schaltet nur screen-match.js wieder ein
+  document.body.classList.remove("live-mode");
   try {
     if ((route = /^#\/team\/([\w-]+)$/.exec(hash))) {
       await renderTeam(app, route[1]);
@@ -66,6 +69,8 @@ async function renderRoute() {
       await renderMatchForm(app, { teamId: route[1] });
     } else if ((route = /^#\/match\/([\w-]+)\/edit$/.exec(hash))) {
       await renderMatchForm(app, { matchId: route[1] });
+    } else if ((route = /^#\/match\/([\w-]+)\/live$/.exec(hash))) {
+      await renderMatch(app, route[1], { live: true });
     } else if ((route = /^#\/match\/([\w-]+)\/report$/.exec(hash))) {
       await renderReport(app, route[1]);
     } else if ((route = /^#\/match\/([\w-]+)$/.exec(hash))) {

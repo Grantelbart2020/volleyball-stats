@@ -312,6 +312,8 @@
   "roster.transferButton": "Wechseln",
   "error.alreadyInTeam": "Diese Person steht in dieser Saison schon im Kader des Zielteams.",
   "match.report": "Spielbericht",
+  "match.continueLive": "Live-Eingabe",
+  "live.menu": "Spiel",
   "report.title": "Spielbericht",
   "report.backToMatch": "Zum Spiel",
   "report.scope": "Auswertung für",
