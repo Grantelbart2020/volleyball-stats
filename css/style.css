@@ -713,6 +713,7 @@ details summary {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none; /* kein Popup beim langen Drücken (iPhone) */
 }
 
 /* Gesperrt (z. B. Punkt noch nicht eingetragen): blasser, nicht antippbar */
@@ -730,6 +731,7 @@ details summary {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .chip-team {
@@ -967,4 +969,194 @@ details summary {
 
 .panel p {
   margin: 0 0 8px;
+}
+
+/* =====================================================================
+   Meilenstein 6: Spielbericht (Bildschirm und Druck)
+   ===================================================================== */
+
+/* Der Bericht darf breiter sein als die übrigen Bildschirme */
+main:has(.report) {
+  max-width: 1400px;
+}
+
+.report-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.report-print-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.field-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.report {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.report-header h2 {
+  margin: 0 0 4px;
+}
+
+.report-header p {
+  margin: 0;
+}
+
+.report-section {
+  margin-top: 20px;
+}
+
+.report-section h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.report-hint {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+/* Breite Tabellen am Handy seitlich scrollbar, statt die Seite zu sprengen */
+.table-wrap {
+  overflow-x: auto;
+}
+
+.report-table {
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums; /* Ziffern gleich breit -> Spalten ruhig */
+}
+
+.report-table th,
+.report-table td {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.report-table thead th {
+  background: var(--bg);
+}
+
+.report-table th.name {
+  text-align: left;
+}
+
+.report-table th.group {
+  font-weight: 600;
+}
+
+/* Kopf eines Codes: farbiger Strich in der Farbe der Stufe */
+.report-table th.code-head {
+  border-bottom: 4px solid transparent;
+}
+
+/* Zeilenkopf einer Stufe: farbiger Strich links */
+.report-table th.quality-row {
+  border-left: 6px solid transparent;
+  font-weight: normal;
+}
+
+.report-table td.total {
+  font-weight: 600;
+}
+
+.report-table .total-row th,
+.report-table .total-row td {
+  font-weight: 600;
+  border-top: 2px solid var(--text-muted);
+}
+
+.report-table td.plus {
+  color: var(--ok);
+}
+
+.report-table td.minus {
+  color: var(--q-poor);
+}
+
+/* Zwei Tabellen nebeneinander, am Handy untereinander */
+.report-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.report-pair > table {
+  overflow-x: auto;
+}
+
+/* ---------- Druck (PDF) ---------- */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
+  /* Immer helle Farben auf Papier, egal welches Design eingestellt ist */
+  :root[data-theme="dark"],
+  :root[data-theme="light"] {
+    --bg: #eef0f3;
+    --surface: #ffffff;
+    --text: #000000;
+    --text-muted: #555555;
+    --border: #b8bcc2;
+    --ok: #1b7f3b;
+  }
+
+  /* Farben (Stufen-Striche) auch drucken */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body {
+    background: #ffffff;
+    font-size: 10pt;
+  }
+
+  .topbar,
+  .no-print {
+    display: none !important;
+  }
+
+  main,
+  main:has(.report) {
+    max-width: none;
+    padding: 0;
+  }
+
+  .report {
+    border: none;
+    padding: 0;
+  }
+
+  .table-wrap {
+    overflow: visible;
+  }
+
+  .report-table {
+    font-size: 7.5pt;
+  }
+
+  /* Abschnitte und Tabellenzeilen nicht über zwei Seiten zerschneiden */
+  .report-section,
+  .report-table tr {
+    break-inside: avoid;
+  }
 }
