@@ -227,6 +227,20 @@ export async function listPersons() {
   return persons.sort(byName);
 }
 
+/*
+  Personen, die schon einmal im Kader DIESES Teams standen (irgendeine Saison).
+  Beim Hinzufügen zum Kader werden nur diese angeboten, damit ein Spieler
+  nicht aus Versehen gleichzeitig in einem anderen Team landet.
+*/
+export async function listTeamPersons(teamId) {
+  const { entries, persons } = await run(["rosterEntries", "persons"], "readonly", (s) => ({
+    entries: s.rosterEntries.index("byTeamSeason").getAll(teamRange(teamId)),
+    persons: s.persons.getAll(),
+  }));
+  const ids = new Set(entries.map((e) => e.personId));
+  return persons.filter((p) => ids.has(p.id)).sort(byName);
+}
+
 /* ---------- Saison-Kader ---------- */
 
 /*

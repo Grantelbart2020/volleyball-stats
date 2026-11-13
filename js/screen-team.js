@@ -48,7 +48,8 @@ export async function renderTeam(container, teamId) {
   const allSeasons = [...new Set([...seasons, season])].sort().reverse();
 
   const roster = await db.listRoster(teamId, season);
-  const persons = await db.listPersons();
+  // Nur Personen dieses Teams (z. B. aus früheren Saisons), keine aus anderen Teams
+  const persons = await db.listTeamPersons(teamId);
   const matches = await db.listMatches(teamId, season);
   // Für das Ergebnis (z. B. 3:1) braucht jedes Spiel seine Ereignisse.
   const results = await Promise.all(matches.map(async (match) =>
@@ -228,7 +229,10 @@ function rosterEditRow(entry, roster, rerender) {
   return el("li", { class: "roster-row editing" }, form, error);
 }
 
-// Formular: Spieler hinzufügen (neue Person oder bestehende Person auswählen)
+/*
+  Formular: Spieler hinzufügen (neue Person oder bestehende Person auswählen).
+  persons = nur Personen, die schon einmal in DIESEM Team waren (andere Saisons).
+*/
 function addPlayerForm(teamId, season, roster, persons, rerender) {
   // Nur Personen anbieten, die noch nicht in diesem Kader sind
   const inRoster = new Set(roster.map((e) => e.personId));
