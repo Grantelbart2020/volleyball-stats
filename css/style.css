@@ -14,6 +14,9 @@
   --text-muted: #9aa0a6;  /* leise Schrift */
   --border: #2f353c;      /* Rahmen */
   --accent: #4f9cf9;      /* Akzentfarbe (Knöpfe) */
+  --zone-frame: rgba(154, 160, 166, 0.35);    /* AUS-Rand bei Aufschlag/Angriff */
+  --zone-cell: rgba(30, 34, 39, 0.75);         /* Zonenfeld, halb durchsichtig */
+  --zone-cell-alt: rgba(18, 20, 23, 0.75);
 }
 
 /* ---------- Farben im hellen Design ---------- */
@@ -24,6 +27,9 @@
   --text-muted: #5f6368;
   --border: #d9dce1;
   --accent: #1a6fd6;
+  --zone-frame: rgba(95, 99, 104, 0.3);
+  --zone-cell: rgba(255, 255, 255, 0.8);
+  --zone-cell-alt: rgba(217, 220, 225, 0.8);
 }
 
 /*
@@ -733,80 +739,127 @@ details summary {
 
 /* ---------- Zonenauswahl (zone-picker.js) ---------- */
 
-.zone-overlay {
-  position: fixed;
+/*
+  Das Raster liegt direkt auf der Feldhälfte: .zone-wrap enthält die Spieler
+  (blass, .zone-under) und darüber den Rahmen mit dem Raster (.zone-frame).
+  Der Rahmen selbst (Seiten + Grundlinie) ist AUS.
+*/
+.zone-wrap {
+  position: relative;
+  height: 290px;          /* 6 Reihen à gut 40 px + Rand für AUS */
+}
+
+.zone-under {
+  height: 100%;
+  opacity: 0.3;
+  pointer-events: none;   /* Spieler sind während der Zonenwahl nicht antippbar */
+}
+
+.zone-under .lineup-court {
+  height: 100%;
+  grid-auto-rows: 1fr;
+}
+
+.zone-frame {
+  position: absolute;
   inset: 0;
-  z-index: 110;           /* über dem Kreismenü */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.45);
+  padding: 0 18px 26px;   /* Netz oben: kein Rand; Seiten und Grundlinie = AUS */
+  border-radius: 8px;
+  background: var(--zone-frame);
+  touch-action: none;
+  cursor: pointer;
 }
 
-.zone-dialog {
-  width: 100%;
-  max-width: 420px;
-  max-height: 100%;
-  overflow-y: auto;
+.zone-frame.rotated {
+  padding: 26px 18px 0;   /* Hälfte oben: Netz unten, Grundlinie oben */
 }
 
-.zone-dialog h3 {
-  margin: 0;
+.zone-frame.pass {
+  background: var(--zone-out);
+}
+
+.zone-out-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.zone-frame.pass .zone-out-label {
+  color: var(--zone-text);
+}
+
+.zone-frame.rotated .zone-out-label {
+  top: 4px;
+  bottom: auto;
 }
 
 .zone-grid {
   display: grid;
   gap: 2px;
+  height: 100%;
 }
 
 .zone-cell {
-  min-height: 44px;       /* gut mit dem Finger zu treffen */
+  min-height: 0;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
   font: inherit;
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
+  touch-action: none;
 }
 
-/* grobe Hauptzonen 1–9: große Felder */
+/* grobe Hauptzonen 1–9: große Ziffern */
 .zone-main {
-  min-height: 72px;
   font-size: 1.4rem;
+  background: var(--zone-cell);
 }
 
-/* feines Raster: Hauptzonen abwechselnd hell/dunkel */
+/* feines Raster: Hauptzonen abwechselnd hell/dunkel, damit man die 2x2-Blöcke erkennt */
 .zone-cell.shade-a {
-  background: var(--surface);
+  background: var(--zone-cell);
 }
 
 .zone-cell.shade-b {
-  background: var(--bg);
+  background: var(--zone-cell-alt);
 }
 
-/* Farbzonen */
-.band-green  { background: var(--zone-green);  color: var(--zone-text); }
-.band-yellow { background: var(--zone-yellow); color: var(--zone-text); }
-.band-orange { background: var(--zone-orange); color: var(--zone-text); }
-.band-pink   { background: var(--zone-pink);   color: var(--zone-text); }
+/* Farbzonen (leicht durchsichtig, Spieler bleiben erkennbar) */
+.band-green  { background: var(--zone-green);  color: var(--zone-text); opacity: 0.75; }
+.band-yellow { background: var(--zone-yellow); color: var(--zone-text); opacity: 0.75; }
+.band-orange { background: var(--zone-orange); color: var(--zone-text); opacity: 0.75; }
+.band-pink   { background: var(--zone-pink);   color: var(--zone-text); opacity: 0.75; }
 
-.zone-out {
-  width: 100%;
-}
-
-.zone-out.band-out {
-  background: var(--zone-out);
-  border-color: var(--zone-out);
-  color: var(--zone-text);
-}
-
-.zone-cell:active,
-.zone-out:active {
+.zone-cell:active {
   outline: 3px solid var(--accent);
+}
+
+/* Verursacher eines Punktes wählen: antippbare Spieler hervorheben */
+.court-spot.cause-pick,
+.chip-touch.cause-pick {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 2px var(--warning);
+}
+
+/* Leiste unter dem Spielfeld während der Zonenwahl (auch für den Punktgrund) */
+.zone-bar {
+  padding: 8px 12px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.zone-bar p {
+  margin: 0 0 8px;
 }
 
 /* Laufender Ballwechsel: Berührungen der Reihe nach */

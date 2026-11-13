@@ -49,6 +49,11 @@ export function playerLabel(player) {
   return player.name ? `#${player.number} ${player.name}` : `#${player.number}`;
 }
 
+// Verursacher eines Punktes: Spieler oder "Trainer" (id "coach", siehe rules.js COACH)
+export function causeLabel(id, playerById) {
+  return id === "coach" ? t("point.coach") : playerLabel(playerById.get(id));
+}
+
 /*
   Ein Ereignis als Satz, z. B. "Wechsel Wir: #7 Anna für #12 Ben".
   names = { own: "Teamname", opp: "Gegnername" }, playerById = Map id -> Spieler
@@ -58,8 +63,17 @@ export function eventText(event, names, playerById) {
   switch (event.type) {
     case "setStart":
       return tf("event.setStart", { n: event.setNumber, team: names[event.firstServe] });
-    case "point":
-      return tf("event.point", { team: names[event.winner] });
+    case "point": {
+      // Grund nur bei manuellen Punkten (ältere Punkte und "touch" ohne Zusatz)
+      const base = tf("event.point", { team: names[event.winner] });
+      if (!event.reason || event.reason === "touch") return base;
+      const reason = t(`point.reason.${event.reason}`);
+      return event.causeId
+        ? `${base} – ${reason}: ${causeLabel(event.causeId, playerById)}`
+        : `${base} – ${reason}`;
+    }
+    case "timeout":
+      return tf("event.timeout", { team: names[event.team] });
     case "substitution":
       return tf(event.exceptional ? "event.substitutionExceptional" : "event.substitution",
         { team: names[event.team], in: p(event.inId), out: p(event.outId) });
