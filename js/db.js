@@ -227,6 +227,38 @@ export async function listPersons() {
   return persons.sort(byName);
 }
 
+/*
+  Personen, die schon einmal im Kader DIESES Teams standen (irgendeine Saison)
+  und in "season" nicht in einem ANDEREN Team stehen (z. B. nach Teamwechsel).
+  Beim Hinzufügen zum Kader werden nur diese angeboten, damit ein Spieler
+  nicht aus Versehen gleichzeitig in zwei Teams landet.
+*/
+export async function listTeamPersons(teamId, season) {
+  const { entries, persons } = await run(["rosterEntries", "persons"], "readonly", (s) => ({
+    entries: s.rosterEntries.getAll(),
+    persons: s.persons.getAll(),
+  }));
+  const ids = new Set(entries.filter((e) => e.teamId === teamId).map((e) => e.personId));
+  const elsewhere = new Set(entries.filter((e) => e.teamId !== teamId && e.season === season).map((e) => e.personId));
+  return persons.filter((p) => ids.has(p.id) && !elsewhere.has(p.id)).sort(byName);
+}
+
+/*
+  Teamwechsel: Die Person verlässt den Kader ihres Teams in dieser Saison und
+  steht danach im Kader des neuen Teams (gleiche Saison, neue Nummer).
+  Beides in EINER Transaktion: Sie steht nie in beiden Kadern oder in keinem.
+  Frühere Saisons und Spiele bleiben beim alten Team (für die Statistik).
+*/
+export function transferRosterEntry(entry, toTeamId, number) {
+  return run("rosterEntries", "readwrite", (s) => {
+    s.rosterEntries.delete(entry.id);
+    s.rosterEntries.add({
+      id: newId(), teamId: toTeamId, season: entry.season, personId: entry.personId, number,
+      createdAt: now(), updatedAt: now(),
+    });
+  });
+}
+
 /* ---------- Saison-Kader ---------- */
 
 /*

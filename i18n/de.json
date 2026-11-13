@@ -306,5 +306,9 @@
   "backup.reminder": "Spiel beendet. Jetzt eine Sicherung speichern? Browserdaten können verloren gehen (z. B. beim Löschen der Browserdaten oder Gerätewechsel).",
   "error.importNotJson": "Diese Datei ist keine gültige Sicherung (kein JSON).",
   "error.importWrongFormat": "Diese Datei ist keine Sicherung dieser App oder beschädigt.",
-  "error.importNewerVersion": "Diese Sicherung stammt aus einer neueren App-Version. Bitte die App aktualisieren."
+  "error.importNewerVersion": "Diese Sicherung stammt aus einer neueren App-Version. Bitte die App aktualisieren.",
+  "roster.transfer": "Team wechseln",
+  "roster.transferTitle": "{name} wechselt in Saison {season} zu:",
+  "roster.transferButton": "Wechseln",
+  "error.alreadyInTeam": "Diese Person steht in dieser Saison schon im Kader des Zielteams."
 }
