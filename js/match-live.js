@@ -15,11 +15,11 @@ import {
   rallyError, substitutionError, suggestAction, suggestLiberoSwap, suggestPoint, timeoutError, touchOutcome,
   validLiberoSwaps,
 } from "./rules.js";
-import { ACTIONS, codesFor, qualityDisplay } from "./ratings.js";
+import { ACTIONS, menuCodes, qualityDisplay } from "./ratings.js";
 import { createRadialMenu } from "./radial-menu.js";
 import { zoneAsked, zoneKind } from "./zones.js";
 import { zoneField } from "./zone-picker.js";
-import { causeLabel, playerLabel, touchText } from "./match-format.js";
+import { causeLabel, playerLabel, qualityLabel, qualityText, touchText } from "./match-format.js";
 
 /* ---------- Punkt per Knopf: Grund und Verursacher ---------- */
 
@@ -105,18 +105,27 @@ function getMenu() {
   if (!menu) {
     menu = createRadialMenu({
       getActionLabel: () => (touchDraft ? t(`action.${touchDraft.action}`) : ""),
+      // Stücke der aktuellen Aktion: kurze Beschriftung, Farbe, voller Name (ratings.js)
+      getItems: () => menuCodes(touchDraft.action).map((code) => {
+        const quality = qualityDisplay(code, touchDraft.action);
+        return {
+          label: qualityLabel(quality),
+          color: quality.color,
+          name: t(`quality.${touchDraft.action}.${quality.id}`),
+        };
+      }),
       // Mitte antippen -> nächste Aktion; nach der letzten wieder von vorn
       onCenterTap: () => {
         const next = (ACTIONS.indexOf(touchDraft.action) + 1) % ACTIONS.length;
         touchDraft.action = ACTIONS[next];
       },
-      // Segment 0–5 -> Code; beim Aufschlag ist die Reihenfolge anders (ratings.js)
+      // Stück -> Code; Reihenfolge und Anzahl je Aktion aus ratings.js (menuCodes)
       onSelect: ({ index }) => {
         const draft = touchDraft;
         touchDraft = null;
         const touch = {
           type: "touch", team: draft.team, playerId: draft.playerId,
-          action: draft.action, quality: codesFor(draft.action)[index],
+          action: draft.action, quality: menuCodes(draft.action)[index],
         };
         // Erst prüfen: Eine Berührung, die ohnehin abgelehnt wird, braucht keine Zone.
         // (addEvent zeigt den Fehler dann an.)
@@ -163,12 +172,11 @@ function cancelZone(ctx) {
 // Leiste unter dem Spielfeld, solange eine Zone gewählt wird
 function zoneBar(ctx) {
   const { touch, kind, half } = pendingZone;
-  const quality = qualityDisplay(touch.quality, touch.action);
   return el("div", { class: "zone-bar" },
     el("p", {},
       el("strong", {}, tf("zone.title", {
         action: t(`action.${touch.action}`),
-        quality: `${quality.symbol} ${t(`quality.${touch.action}.${quality.id}`)}`,
+        quality: qualityText(touch.quality, touch.action),
         team: ctx.names[half],
       })),
       " ",

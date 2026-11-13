@@ -293,6 +293,13 @@ test("Aktionsvorschlag folgt dem Ballwechsel", () => {
   // Ball kommt "frei" herüber (z. B. nach gegnerischem Zuspiel): Freeball
   const oppSet = [...afterServe, touch(OWN, "o5", "reception", "-"), touch(OPP, null, "set", "!")];
   assert.equal(suggestAction(at(oppSet), OWN, "o6"), "freeball");
+  // "Freeball rüber" / "rüber" / "Freeball" (Code "/") -> beim anderen Team Freeball (Nutzerwunsch 13.11.2026)
+  const recOver = [...afterServe, touch(OWN, "o5", "reception", "/")];
+  assert.equal(suggestAction(at(recOver), OPP, null), "freeball");
+  for (const action of ["set", "dig", "freeball"]) {
+    const over = [...afterServe, touch(OWN, "o5", "reception", "-"), touch(OWN, "o3", action, "/")];
+    assert.equal(suggestAction(at(over), OPP, null), "freeball", action);
+  }
 });
 
 test("Berührung prüfen", () => {
@@ -427,9 +434,9 @@ test("Zone wird nur gefragt, wenn der Ball ein Ziel hat", () => {
 test("Aufschlag '/' ist sehr positiv und wird als zweitbestes angezeigt", () => {
   assert.deepEqual(codesFor("serve"), ["#", "/", "+", "!", "-", "="]);
   assert.deepEqual(codesFor("attack"), ["#", "+", "!", "-", "/", "="]);
-  assert.equal(qualityDisplay("/", "serve").color, "var(--q-positive)");
+  assert.equal(qualityDisplay("/", "serve").color, "var(--q-plus2)"); // "++" grün (13.11.2026)
   assert.equal(qualityDisplay("/", "serve").id, "poor"); // Name über "quality.serve.poor"
-  assert.equal(qualityDisplay("/", "attack").color, "var(--q-poor)");
+  assert.equal(qualityDisplay("/", "attack").color, "var(--q-over)");  // geblockt: blau
 });
 
 test("Wechsel und Libero-Tausch nur zwischen den Ballwechseln", () => {

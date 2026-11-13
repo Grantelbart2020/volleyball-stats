@@ -44,6 +44,14 @@
   --q-poor:     #e04646; /* /  sehr negativ     – rot        */
   --q-error:    #6b6f76; /* =  Fehler           – grau       */
 
+  /* Anzeige pro Aktion (ratings.js qualityDisplay, Nutzerfestlegung 13.11.2026) */
+  --q-point:  #146c30; /* Ass / # Punkt   – dunkelgrün */
+  --q-plus2:  #34a853; /* ++              – grün       */
+  --q-plus:   #9ccc65; /* +               – hellgrün   */
+  --q-mid:    #f2c94c; /* =  mittel       – gelb       */
+  --q-minus:  #f2994a; /* −               – orange     */
+  --q-over:   #4a7fd6; /* Freeball / rüber / geblockt – blau */
+
   /* Farbzonen für Annahme/Abwehr laut Bewertungsgrundlage (in beiden Designs gleich) */
   --zone-green:  #b6d7a8;
   --zone-yellow: #ffe599;
@@ -228,6 +236,17 @@ main {
   text-anchor: middle;
   dominant-baseline: central;
   pointer-events: none;
+}
+
+/* Wörter im Stück ("Ass", "Freeball rüber") kleiner als Zeichen */
+.radial-label.word {
+  font-size: 13px;
+  stroke-width: 2.5px;
+}
+
+/* Beim Ziehen: voller Name der Stufe in der Mitte, etwas kleiner */
+.radial-center-text.name {
+  font-size: 11px;
 }
 
 /* Liste der letzten Eingaben */

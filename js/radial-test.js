@@ -5,8 +5,9 @@
   Es wird hier absichtlich nichts gespeichert. Diese Datei wird später durch capture.js
   und court.js ersetzt; radial-menu.js und ratings.js bleiben erhalten.
 */
-import { ACTIONS } from "./ratings.js";
+import { ACTIONS, menuCodes, qualityDisplay } from "./ratings.js";
 import { createRadialMenu } from "./radial-menu.js";
+import { qualityLabel } from "./match-format.js";
 import { t } from "./i18n.js";
 import { el } from "./dom.js";
 
@@ -51,7 +52,7 @@ function renderLog() {
     item.appendChild(dot);
     item.append(
       `#${entry.number} · ${t(`action.${entry.action}`)} · ` +
-      `${entry.quality.symbol} ${t(`quality.${entry.quality.id}`)}  (${entry.quality.code})`
+      `${entry.quality.symbol} ${t(`quality.${entry.action}.${entry.quality.id}`)}  (${entry.quality.code})`
     );
     log.appendChild(item);
   }
@@ -63,11 +64,18 @@ let menu = null;
 
 function getMenu() {
   if (!menu) {
+    // Stücke wie in der Live-Eingabe (Beschriftung pro Aktion, ratings.js)
+    const looks = () => menuCodes(ACTIONS[actionIndex]).map((code) => qualityDisplay(code, ACTIONS[actionIndex]));
     menu = createRadialMenu({
       getActionLabel: currentActionLabel,
+      getItems: () => looks().map((q) => ({
+        label: qualityLabel(q), color: q.color, name: t(`quality.${ACTIONS[actionIndex]}.${q.id}`),
+      })),
       // Mitte antippen -> nächste Aktion; nach der letzten wieder von vorn
       onCenterTap: () => { actionIndex = (actionIndex + 1) % ACTIONS.length; },
-      onSelect: ({ player, quality }) => {
+      onSelect: ({ player, index }) => {
+        const look = looks()[index];
+        const quality = { ...look, symbol: qualityLabel(look) };
         entries.unshift({ number: player.number, action: ACTIONS[actionIndex], quality });
         entries.length = Math.min(entries.length, 10); // höchstens 10 behalten
         renderLog();

@@ -1,9 +1,12 @@
 /*
   radial-menu.js – das Kreismenü ("Waffenrad").
 
-  Benutzung (siehe radial-test.js):
-    const menu = createRadialMenu({ getActionLabel, onCenterTap, onSelect });
+  Benutzung (siehe match-live.js):
+    const menu = createRadialMenu({ getActionLabel, getItems, onCenterTap, onSelect });
     menu.start(pointerEvent, player);   // beim Antippen eines Spielers aufrufen
+  getItems() liefert die Stücke der aktuellen Aktion, vom besten zum schlechtesten:
+    [{ label: "++", color: "var(--q-plus2)", name: "Doppelt positiv" }, …]
+  (meist 6, beim Block 5). Beim Ziehen zeigt die Mitte den Namen des markierten Stücks.
 
   Ablauf:
     1. Finger setzt auf einem Spieler auf -> Rad erscheint um den Finger.
@@ -19,8 +22,6 @@
   Viertelkreis), mit größerem Radius. Die Rechnung steckt in menuLayout()
   und segmentAt() (rein, getestet in tests/radial.test.mjs).
 */
-import { QUALITIES } from "./ratings.js";
-
 // ---------- Maße in Pixeln (hier anpassen, wenn das Rad zu groß/klein ist) ----------
 const RADIUS = 120;     // Außenradius des vollen Rads
 const FAN_RADIUS = 150; // Außenradius des Fächers am Rand (größer, weil die Stücke schmaler sind)
@@ -30,7 +31,6 @@ const MARGIN = 8;       // Abstand des Rads zum Bildschirmrand
 const MIN_ARC = 100;    // kleinster Fächer in Grad; ist weniger Platz, wird der Kreis verschoben (Notlösung)
 const TOLERANCE = 20;   // so viele Grad neben dem Fächer zählen noch als erstes/letztes Stück
 
-const COUNT = QUALITIES.length; // 6 Stufen
 const SVG_NS = "http://www.w3.org/2000/svg"; // nötig, um SVG-Elemente per JavaScript zu erzeugen
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -78,18 +78,19 @@ function freeArc(x, y, w, h, radius) {
 
 /*
   Wo und wie wird das Rad gezeichnet, wenn der Finger bei (x, y) aufsetzt?
-  Ergebnis: { cx, cy, radius, start, width, reverse }
+  Ergebnis: { cx, cy, radius, start, width, reverse, count }
     cx, cy   Mittelpunkt (= Finger; nur ganz am Rand ein kleines Stück nach innen)
-    start, width   Bogen in Grad, auf den die 6 Stufen verteilt werden (360 = voller Kreis)
-    reverse  true: Stufe 0 liegt am Ende des Bogens (damit "★" möglichst oben ist)
+    start, width   Bogen in Grad, auf den die Stufen verteilt werden (360 = voller Kreis)
+    reverse  true: Stufe 0 liegt am Ende des Bogens (damit die beste möglichst oben ist)
+    count    Anzahl der Stücke (meist 6, beim Block 5)
   Exportiert für die Tests.
 */
-export function menuLayout(x, y, w, h) {
+export function menuLayout(x, y, w, h, count = 6) {
   // Die Mitte selbst muss ganz sichtbar sein
   const inset = INNER + MARGIN;
   const cx = clamp(x, inset, w - inset);
   const cy = clamp(y, inset, h - inset);
-  const full = { radius: RADIUS, start: -180 / COUNT, width: 360, reverse: false };
+  const full = { radius: RADIUS, start: -180 / count, width: 360, reverse: false, count };
 
   const fitsFull = cx - RADIUS >= MARGIN && cx + RADIUS <= w - MARGIN
     && cy - RADIUS >= MARGIN && cy + RADIUS <= h - MARGIN;
@@ -99,7 +100,7 @@ export function menuLayout(x, y, w, h) {
   if (arc.width >= MIN_ARC) {
     // Ende näher an "oben" als der Anfang? Dann von hinten anfangen.
     const reverse = fromTop(arc.start + arc.width) < fromTop(arc.start);
-    return { cx, cy, radius: FAN_RADIUS, start: arc.start, width: arc.width, reverse };
+    return { cx, cy, radius: FAN_RADIUS, start: arc.start, width: arc.width, reverse, count };
   }
 
   // Notlösung (sehr kleiner Bildschirm): voller Kreis, so weit verschoben, dass er passt
@@ -112,22 +113,23 @@ export function menuLayout(x, y, w, h) {
 
 // Anfangs- und Endwinkel des Stücks Nr. index (0 = beste Stufe) in diesem Layout
 function segmentRange(index, layout) {
-  const step = layout.width / COUNT;
-  const slot = layout.reverse ? COUNT - 1 - index : index;
+  const step = layout.width / layout.count;
+  const slot = layout.reverse ? layout.count - 1 - index : index;
   const a0 = layout.start + slot * step;
   return [a0, a0 + step];
 }
 
 /*
   Welches Stück liegt in Richtung (dx, dy) vom Mittelpunkt?
-  Gibt 0–5 zurück, oder null, wenn die Richtung deutlich neben dem Fächer liegt.
+  Gibt 0 … count-1 zurück, oder null, wenn die Richtung deutlich neben dem Fächer liegt.
   Exportiert für die Tests.
 */
 export function segmentAt(dx, dy, layout) {
+  const last = layout.count - 1;
   // atan2 liefert den Winkel; so umgestellt, dass 0° oben ist
   const angle = norm((Math.atan2(dx, -dy) * 180) / Math.PI);
   const rel = norm(angle - layout.start); // Winkel ab Beginn des Bogens
-  const step = layout.width / COUNT;
+  const step = layout.width / layout.count;
   let slot;
   if (rel < layout.width) {
     slot = Math.floor(rel / step);
@@ -136,10 +138,10 @@ export function segmentAt(dx, dy, layout) {
     const afterEnd = rel - layout.width;
     const beforeStart = 360 - rel;
     if (Math.min(afterEnd, beforeStart) > TOLERANCE) return null;
-    slot = afterEnd < beforeStart ? COUNT - 1 : 0;
+    slot = afterEnd < beforeStart ? last : 0;
   }
-  slot = clamp(slot, 0, COUNT - 1);
-  return layout.reverse ? COUNT - 1 - slot : slot;
+  slot = clamp(slot, 0, last);
+  return layout.reverse ? last - slot : slot;
 }
 
 // Zeichnet ein tortenstück-förmiges Segment als SVG-Pfad.
@@ -153,7 +155,25 @@ function segmentPath(index, layout) {
           L ${i1.x} ${i1.y} A ${INNER} ${INNER} 0 0 0 ${i0.x} ${i0.y} Z`;
 }
 
-export function createRadialMenu({ getActionLabel, onCenterTap, onSelect }) {
+/*
+  Schreibt Text in ein SVG-<text>; bei Leerzeichen zweizeilig ("Freeball" / "rüber").
+  (SVG bricht nicht von selbst um, deshalb zwei <tspan>-Zeilen.)
+*/
+function setLines(textEl, value) {
+  textEl.replaceChildren();
+  const words = String(value).split(" ");
+  const lines = words.length > 1 ? [words[0], words.slice(1).join(" ")] : words;
+  lines.forEach((line, i) => {
+    const span = document.createElementNS(SVG_NS, "tspan");
+    span.setAttribute("x", textEl.getAttribute("x") ?? 0);
+    // erste Zeile etwas nach oben, damit beide Zeilen zusammen mittig stehen
+    span.setAttribute("dy", i === 0 ? `${-(lines.length - 1) * 0.55}em` : "1.1em");
+    span.textContent = line;
+    textEl.appendChild(span);
+  });
+}
+
+export function createRadialMenu({ getActionLabel, getItems, onCenterTap, onSelect }) {
   // ---------- Aufbau der Elemente (einmalig) ----------
 
   // Overlay = durchsichtige Fläche über dem ganzen Bildschirm, darauf liegt das Rad
@@ -169,31 +189,31 @@ export function createRadialMenu({ getActionLabel, onCenterTap, onSelect }) {
   svg.setAttribute("height", SIZE);
   svg.setAttribute("viewBox", `${-FAN_RADIUS} ${-FAN_RADIUS} ${SIZE} ${SIZE}`);
 
-  // Die 6 Segmente mit Symbol (Form und Lage setzt drawLayout beim Öffnen)
-  const segments = [];
-  const labels = [];
-  QUALITIES.forEach((quality) => {
-    const path = document.createElementNS(SVG_NS, "path");
-    path.setAttribute("class", "radial-segment");
-    path.style.fill = quality.color;
-    svg.appendChild(path);
-    segments.push(path);
+  // Gruppe für die Stücke; wird bei jedem Öffnen bzw. Aktionswechsel neu gefüllt
+  const pieces = document.createElementNS(SVG_NS, "g");
+  svg.appendChild(pieces);
+  let segments = [];
 
-    const label = document.createElementNS(SVG_NS, "text");
-    label.setAttribute("class", "radial-label");
-    label.textContent = quality.symbol;
-    svg.appendChild(label);
-    labels.push(label);
-  });
-
-  // Stücke und Symbole passend zum Layout (voller Kreis oder Fächer) setzen
-  function drawLayout(layout) {
-    segments.forEach((path, index) => {
+  // Stücke mit Beschriftung passend zu Aktion (items) und Layout (Kreis oder Fächer)
+  function drawLayout() {
+    pieces.replaceChildren();
+    segments = items.map((item, index) => {
+      const path = document.createElementNS(SVG_NS, "path");
+      path.setAttribute("class", "radial-segment");
       path.setAttribute("d", segmentPath(index, layout));
+      path.style.fill = item.color;
+      pieces.appendChild(path);
+
       const [a0, a1] = segmentRange(index, layout);
       const pos = pointAt((a0 + a1) / 2, (layout.radius + INNER) / 2);
-      labels[index].setAttribute("x", pos.x);
-      labels[index].setAttribute("y", pos.y);
+      const label = document.createElementNS(SVG_NS, "text");
+      // Wörter kleiner als Zeichen wie "++", damit sie ins Stück passen
+      label.setAttribute("class", `radial-label${item.label.length > 2 ? " word" : ""}`);
+      label.setAttribute("x", pos.x);
+      label.setAttribute("y", pos.y);
+      setLines(label, item.label);
+      pieces.appendChild(label);
+      return path;
     });
   }
 
@@ -216,12 +236,16 @@ export function createRadialMenu({ getActionLabel, onCenterTap, onSelect }) {
   let player = null;        // der angetippte Spieler
   let cx = 0, cy = 0;       // Mittelpunkt des Rads auf dem Bildschirm
   let layout = null;        // aktuelles Layout (menuLayout): voller Kreis oder Fächer
-  let highlighted = null;   // aktuell markiertes Segment (0–5) oder null
+  let items = [];           // Stücke der aktuellen Aktion (getItems)
+  let fingerX = 0, fingerY = 0; // wo der Finger aufgesetzt hat (für Neuberechnung beim Aktionswechsel)
+  let highlighted = null;   // aktuell markiertes Segment oder null
   let pointerId = null;     // der Finger, der das Rad geöffnet hat (andere Finger zählen nicht)
 
+  // Markiertes Stück hervorheben; die Mitte zeigt dann seinen vollen Namen
   function highlight(index) {
     highlighted = index;
     segments.forEach((path, i) => path.classList.toggle("active", i === index));
+    updateCenterText();
   }
 
   function close() {
@@ -236,21 +260,32 @@ export function createRadialMenu({ getActionLabel, onCenterTap, onSelect }) {
     const chosenPlayer = player;
     close();
     navigator.vibrate?.(15); // kurzes Vibrieren, falls das Gerät es kann ("?." = nur wenn vorhanden)
-    // index = Segment 0–5 (0 = bestes); welcher Code das ist, hängt von der Aktion ab (ratings.js codesFor)
-    onSelect({ player: chosenPlayer, quality: QUALITIES[index], index });
+    // index = Stück (0 = bestes); welcher Code das ist, weiß der Aufrufer (ratings.js menuCodes)
+    onSelect({ player: chosenPlayer, index });
   }
 
+  // Mitte: Name des markierten Stücks, sonst die Aktion
   function updateCenterText() {
-    centerText.textContent = getActionLabel();
+    const item = highlighted !== null ? items[highlighted] : null;
+    centerText.classList.toggle("name", Boolean(item));
+    setLines(centerText, item ? item.name : getActionLabel());
+  }
+
+  // Stücke der aktuellen Aktion holen und Layout dafür berechnen
+  function prepare() {
+    items = getItems();
+    layout = menuLayout(fingerX, fingerY, window.innerWidth, window.innerHeight, items.length);
+    ({ cx, cy } = layout);
+    drawLayout();
   }
 
   // ---------- Öffnen ----------
   function start(event, tappedPlayer) {
     player = tappedPlayer;
     // Mittelpunkt = Fingerposition; am Rand Fächer statt verschobenem Kreis
-    layout = menuLayout(event.clientX, event.clientY, window.innerWidth, window.innerHeight);
-    ({ cx, cy } = layout);
-    drawLayout(layout);
+    fingerX = event.clientX;
+    fingerY = event.clientY;
+    prepare();
     svg.style.left = `${cx - FAN_RADIUS}px`;
     svg.style.top = `${cy - FAN_RADIUS}px`;
     updateCenterText();
@@ -325,7 +360,8 @@ export function createRadialMenu({ getActionLabel, onCenterTap, onSelect }) {
     const index = segmentAt(dx, dy, layout);
     if (distance < INNER) {
       onCenterTap();          // Mitte -> Aktion wechseln
-      updateCenterText();
+      prepare();              // andere Aktion = andere Beschriftungen (Block: 5 Stücke)
+      highlight(null);
     } else if (distance <= layout.radius + 20 && index !== null) {
       select(index);          // Segment (mit etwas Spielraum am Rand)
     } else {
