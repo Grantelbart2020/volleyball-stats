@@ -1,16 +1,18 @@
 /*
-  zone-picker.js – Auswahl der Zone nach der Bewertung (Aufschlag, Angriff,
-  Annahme, Abwehr). Erscheint als Fenster über der Seite.
+  zone-picker.js – Zonenraster, das direkt AUF einer Feldhälfte des Spielfelds
+  liegt (kein eigenes Fenster). So bleibt man beim schnellen Eingeben auf
+  demselben Bild: Spieler antippen, Bewertung wählen, Zone auf dem Feld antippen.
 
-  Benutzung:
-    openZonePicker({ kind, mode, rotated, title, onPick, onCancel })
+  Benutzung (siehe match-live.js):
+    zoneField({ kind, mode, rotated, onPick })  -> Element, das über die Feldhälfte gelegt wird
       kind     "target" (Ziel beim Gegner) oder "pass" (Ankunft auf der eigenen Seite)
       mode     "coarse" oder "fine" (Einstellung)
       rotated  true, wenn diese Feldhälfte auf dem Bildschirm OBEN liegt
                (dann ist das Netz unten und alles um 180° gedreht)
-      onPick(zone)  zone = gespeicherter Wert (siehe zones.js) oder null = ohne Zone
-      onCancel()    Abbrechen: die Berührung wird nicht gespeichert
+      onPick(zone)  zone = gespeicherter Wert (siehe zones.js), "out" = AUS
 
+  Der Rand um das Raster (Seiten und Grundlinie, nicht das Netz) ist AUS:
+  einfach daneben tippen.
   Welche Werte es gibt, steht in zones.js. Hier wird nur gezeichnet.
 */
 import { el } from "./dom.js";
@@ -42,46 +44,33 @@ function buildRows(kind, mode) {
   }));
 }
 
-export function openZonePicker({ kind, mode, rotated, title, onPick, onCancel }) {
+export function zoneField({ kind, mode, rotated, onPick }) {
   let rows = buildRows(kind, mode);
   // Liegt die Hälfte oben, sieht man sie "von der anderen Seite": Reihen und Spalten umdrehen
   if (rotated) rows = rows.map((row) => [...row].reverse()).reverse();
 
-  const close = () => {
-    overlay.remove();
-    document.removeEventListener("keydown", onKey);
-  };
-  const pick = (zone) => { close(); onPick(zone); };
-  const cancel = () => { close(); onCancel?.(); };
-  const onKey = (event) => { if (event.key === "Escape") cancel(); };
+  const size = rows.length;
+  const grid = el("div", {
+    class: "zone-grid",
+    style: `grid-template-columns: repeat(${size}, 1fr); grid-template-rows: repeat(${size}, 1fr)`,
+  }, rows.flat().map((f) => el("button", {
+    type: "button", class: f.cls,
+    // pointerdown statt click: reagiert sofort beim Antippen (schnelle Live-Eingabe)
+    onPointerdown: (event) => { event.preventDefault(); event.stopPropagation(); onPick(f.value); },
+  }, f.label)));
 
-  const grid = el("div", { class: "zone-grid", style: `grid-template-columns: repeat(${rows[0].length}, 1fr)` },
-    rows.flat().map((f) => el("button", { type: "button", class: f.cls, onClick: () => pick(f.value) }, f.label)));
-
-  const net = el("div", { class: "net" });
-  const outButton = el("button", {
-    type: "button", class: `btn zone-out${kind === "pass" ? " band-out" : ""}`, onClick: () => pick(OUT),
-  }, t("zone.out"));
-
-  const dialog = el("div", { class: "zone-dialog card stack", role: "dialog" },
-    el("h3", {}, title),
-    // Netz oben oder unten, so wie die Feldhälfte auf dem Bildschirm liegt
-    !rotated && net,
+  // Rahmen = AUS. Tipp auf den Rahmen selbst (nicht auf ein Feld) -> AUS
+  const frame = el("div", {
+    class: `zone-frame${rotated ? " rotated" : ""}${kind === "pass" ? " pass" : ""}`,
+    onPointerdown: (event) => {
+      if (event.target === frame || event.target.classList.contains("zone-out-label")) {
+        event.preventDefault();
+        onPick(OUT);
+      }
+    },
+  },
+    el("span", { class: "zone-out-label" }, t("zone.out")),
     grid,
-    rotated && net,
-    outButton,
-    el("p", { class: "muted small" }, t(kind === "pass" ? "zone.passHint" : "zone.targetHint")),
-    el("div", { class: "row-actions" },
-      el("button", { type: "button", class: "btn btn-primary", onClick: () => pick(null) }, t("zone.skip")),
-      el("button", { type: "button", class: "btn", onClick: cancel }, t("common.cancel")),
-    ),
   );
-
-  // Tipp neben das Fenster = Abbrechen
-  const overlay = el("div", {
-    class: "zone-overlay",
-    onClick: (event) => { if (event.target === overlay) cancel(); },
-  }, dialog);
-  document.body.appendChild(overlay);
-  document.addEventListener("keydown", onKey);
+  return frame;
 }

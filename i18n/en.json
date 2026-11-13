@@ -243,8 +243,8 @@
   "zone.band.yellow": "yellow zone",
   "zone.band.orange": "orange zone",
   "zone.band.pink": "pink zone",
-  "zone.targetHint": "Where did the ball go? Tap a zone, OUT or “No zone”.",
-  "zone.passHint": "Where did the ball arrive? Green = at the setter, pink = far back.",
+  "zone.targetHint": "Tap the zone on the court, border = OUT.",
+  "zone.passHint": "Where did the ball arrive? Tap on the court, border = OUT.",
   "error.mirrorMismatch": "This rating does not fit the point already decided (e.g. after “Blocked” only a block point).",
   "error.zoneInvalid": "This zone does not exist.",
   "error.zoneNotAllowed": "No zone is recorded for this skill."

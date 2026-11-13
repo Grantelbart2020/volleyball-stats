@@ -243,8 +243,8 @@
   "zone.band.yellow": "gelbe Zone",
   "zone.band.orange": "orange Zone",
   "zone.band.pink": "rosa Zone",
-  "zone.targetHint": "Wohin ging der Ball? Zone antippen, AUS oder „Ohne Zone“.",
-  "zone.passHint": "Wo kam der Ball an? Grün = beim Zuspieler, Rosa = weit hinten.",
+  "zone.targetHint": "Zone auf dem Spielfeld antippen, Rand = AUS.",
+  "zone.passHint": "Wo kam der Ball an? Auf dem Spielfeld antippen, Rand = AUS.",
   "error.mirrorMismatch": "Diese Bewertung passt nicht zum schon entschiedenen Punkt (z. B. nach „Geblockt“ nur Blockpunkt).",
   "error.zoneInvalid": "Diese Zone gibt es nicht.",
   "error.zoneNotAllowed": "Für diese Aktion wird keine Zone erfasst."

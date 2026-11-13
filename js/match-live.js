@@ -16,7 +16,7 @@ import {
 import { ACTIONS, codesFor, qualityDisplay } from "./ratings.js";
 import { createRadialMenu } from "./radial-menu.js";
 import { zoneAsked, zoneKind } from "./zones.js";
-import { openZonePicker } from "./zone-picker.js";
+import { zoneField } from "./zone-picker.js";
 import { playerLabel, touchText } from "./match-format.js";
 
 /* ---------- Kreismenü für die Ballberührung ---------- */
@@ -60,27 +60,54 @@ function getMenu() {
 }
 
 /*
-  Zweiter Schritt: Zone wählen (oder "Ohne Zone"). Gespeichert wird die
-  Berührung erst danach, als EIN Ereignis.
-  Aufschlag/Angriff: Zone auf der Feldhälfte des Gegners.
-  Annahme/Abwehr:    Zone auf der eigenen Feldhälfte (wo der Ball ankommt).
+  Zweiter Schritt: Zone wählen (oder "Ohne Zone"). Das Raster erscheint direkt
+  auf der passenden Feldhälfte des Spielfelds (zone-picker.js):
+    Aufschlag/Angriff: Feldhälfte des Gegners (wohin der Ball geht)
+    Annahme/Abwehr:    eigene Feldhälfte (wo der Ball ankommt)
+  Gespeichert wird die Berührung erst danach, als EIN Ereignis.
+  "pendingZone" merkt sich die wartende Berührung (bleibt beim Neuzeichnen erhalten):
+    null  oder  { matchId, touch, kind, half }
 */
+let pendingZone = null;
+
 function askZone(ctx, touch) {
   const kind = zoneKind(touch.action);
-  const half = kind === "target" ? otherTeam(touch.team) : touch.team;
-  const topTeam = ctx.match.ownSideTop ? OWN : OPP;
+  pendingZone = { matchId: ctx.match.id, touch, kind, half: kind === "target" ? otherTeam(touch.team) : touch.team };
+  ctx.rerender();
+}
+
+// Zone gewählt (zone = null: ohne Zone) -> Berührung speichern
+function finishZone(ctx, zone) {
+  if (!pendingZone) return;
+  const { touch } = pendingZone;
+  pendingZone = null;
+  ctx.addEvent(zone ? { ...touch, zone } : touch);
+}
+
+function cancelZone(ctx) {
+  pendingZone = null;
+  ctx.rerender();
+}
+
+// Leiste unter dem Spielfeld, solange eine Zone gewählt wird
+function zoneBar(ctx) {
+  const { touch, kind, half } = pendingZone;
   const quality = qualityDisplay(touch.quality, touch.action);
-  openZonePicker({
-    kind,
-    mode: ctx.settings.zoneMode,
-    rotated: half === topTeam,
-    title: tf("zone.title", {
-      action: t(`action.${touch.action}`),
-      quality: `${quality.symbol} ${t(`quality.${touch.action}.${quality.id}`)}`,
-      team: ctx.names[half],
-    }),
-    onPick: (zone) => ctx.addEvent(zone ? { ...touch, zone } : touch),
-  });
+  return el("div", { class: "zone-bar" },
+    el("p", {},
+      el("strong", {}, tf("zone.title", {
+        action: t(`action.${touch.action}`),
+        quality: `${quality.symbol} ${t(`quality.${touch.action}.${quality.id}`)}`,
+        team: ctx.names[half],
+      })),
+      " ",
+      el("span", { class: "muted small" }, t(kind === "pass" ? "zone.passHint" : "zone.targetHint")),
+    ),
+    el("div", { class: "row-actions" },
+      el("button", { type: "button", class: "btn btn-primary", onClick: () => finishZone(ctx, null) }, t("zone.skip")),
+      el("button", { type: "button", class: "btn", onClick: () => cancelZone(ctx) }, t("common.cancel")),
+    ),
+  );
 }
 
 // Finger setzt auf einem Spieler (oder "Mannschaft") auf -> Kreismenü mit Aktionsvorschlag
@@ -98,6 +125,7 @@ function startTouch(event, ctx, team, playerId) {
   Die genaue Prüfung (passt die Bewertung?) macht rules.js beim Speichern.
 */
 function touchBlocked(set, team) {
+  if (pendingZone) return true; // erst Zone wählen
   if (rallyError(set)) return true;
   if (!suggestPoint(set)) return false;
   const last = set.rally[set.rally.length - 1];
@@ -119,13 +147,14 @@ export function liveCard(ctx) {
   const set = ctx.state.activeSet;
   const { match } = ctx;
   if (panel && panel.matchId !== match.id) panel = null;
+  if (pendingZone && pendingZone.matchId !== match.id) pendingZone = null;
 
   const topTeam = match.ownSideTop ? OWN : OPP;
   const blocker = rallyError(set);
 
   const pointButtons = el("div", { class: "point-buttons" }, TEAMS.map((team) =>
     el("button", {
-      type: "button", class: "btn btn-primary btn-big", disabled: Boolean(blocker),
+      type: "button", class: "btn btn-primary btn-big", disabled: Boolean(blocker || pendingZone),
       onClick: () => ctx.addEvent({ type: "point", winner: team }),
     }, tf("live.point", { team: ctx.names[team] }))));
 
@@ -134,7 +163,8 @@ export function liveCard(ctx) {
     courtHalf(ctx, set, topTeam, true),
     el("div", { class: "net" }),
     courtHalf(ctx, set, otherTeam(topTeam), false),
-    TEAMS.map((team) => suggestionBox(ctx, set, team)),
+    pendingZone && zoneBar(ctx),
+    !pendingZone && TEAMS.map((team) => suggestionBox(ctx, set, team)),
     blocker === "liberoMustExit" && el("p", { class: "form-warning" }, t("live.liberoBlocks")),
     rallyView(ctx, set),
     pointSuggestion(ctx, set),
@@ -178,20 +208,37 @@ function courtHalf(ctx, set, team, top) {
   // Antippen startet das Kreismenü (pointerdown = Finger oder Maus drückt)
   const tapHandler = (playerId) => (event) => { if (!blocked) startTouch(event, ctx, team, playerId); };
 
+  /*
+    Wird gerade eine Zone auf DIESER Hälfte gewählt, liegt das Zonenraster über
+    den Spielern (die bleiben blass sichtbar, damit man sich orientieren kann).
+  */
+  const withZone = (content) => {
+    if (pendingZone?.half !== team) return content;
+    return el("div", { class: "zone-wrap" },
+      el("div", { class: "zone-under" }, content),
+      zoneField({
+        kind: pendingZone.kind,
+        mode: ctx.settings.zoneMode,
+        rotated: top,
+        onPick: (zone) => finishZone(ctx, zone),
+      }),
+    );
+  };
+
   if (!ts.lineup) {
     // Ohne Aufstellung: "Mannschaft" antippen, bei einzelnen Gegnerspielern auch den Spieler
     const players = ctx.settings.opponentMode === "players" ? ctx.players.filter((p) => p.side === team) : [];
     return el("div", { class: "court-half" },
       label,
       el("p", { class: "muted small" }, t("live.noLineup")),
-      el("div", { class: "chip-list touch-list" },
+      withZone(el("div", { class: "chip-list touch-list" },
         el("button", {
           type: "button", class: "chip chip-touch chip-team", disabled: blocked, onPointerdown: tapHandler(null),
         }, tf("live.wholeTeam", { team: ctx.names[team] })),
         players.map((p) => el("button", {
           type: "button", class: "chip chip-touch", disabled: blocked, onPointerdown: tapHandler(p.id),
         }, playerLabel(p))),
-      ),
+      )),
     );
   }
 
@@ -210,7 +257,7 @@ function courtHalf(ctx, set, team, top) {
 
   return el("div", { class: "court-half" },
     top && label,
-    el("div", { class: "lineup-court" }, spots),
+    withZone(el("div", { class: "lineup-court" }, spots)),
     !top && label,
   );
 }
