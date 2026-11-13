@@ -8,7 +8,7 @@
 import { el, showError } from "./dom.js";
 import { t } from "./i18n.js";
 import * as db from "./db.js";
-import { RULE_LIMITS, seasonForDate } from "./rules.js";
+import { RULE_LIMITS, defaultRules, seasonForDate } from "./rules.js";
 import { getSettings } from "./settings.js";
 
 /* ---------- Regelwerte als Eingabefelder ---------- */
@@ -16,7 +16,7 @@ import { getSettings } from "./settings.js";
 // Reihenfolge der Felder; der Text steht in den Sprachdateien unter "rules.<name>".
 const RULE_FIELDS = [
   "setsToWin", "pointsPerSet", "pointsDecidingSet", "minLead",
-  "maxSubstitutions", "maxPlayers", "maxLiberos",
+  "maxSubstitutions", "maxTimeouts", "maxPlayers", "maxLiberos",
 ];
 
 /*
@@ -27,7 +27,8 @@ export function rulesFields(rules, disabled = false) {
   const inputs = {};
   const rows = RULE_FIELDS.map((name) => {
     inputs[name] = el("input", {
-      type: "text", inputMode: "numeric", maxLength: 2, value: rules[name],
+      // ältere Spiele kennen neue Regelwerte (z. B. Auszeiten) noch nicht -> Standardwert
+      type: "text", inputMode: "numeric", maxLength: 2, value: rules[name] ?? defaultRules()[name],
       class: "input-number", disabled,
     });
     const [min, max] = RULE_LIMITS[name];

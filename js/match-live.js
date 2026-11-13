@@ -1,7 +1,8 @@
 /*
   match-live.js – der laufende Satz: Spielstand, Spielfeld mit Aufstellung,
   Ballberührungen (Spieler antippen -> Kreismenü), laufender Ballwechsel,
-  Punkt (Vorschlag oder Knopf), Auswechslung, Libero-Tausch, Seiten tauschen.
+  Punkt (Vorschlag oder Knopf mit Grund), Auszeit, Auswechslung, Libero-Tausch,
+  Seiten tauschen.
 
   Alle Regeln kommen aus rules.js. Hier wird nur angezeigt und das passende
   Ereignis gespeichert (ctx.addEvent).
@@ -10,14 +11,84 @@ import { el, showError } from "./dom.js";
 import { t, tf } from "./i18n.js";
 import * as db from "./db.js";
 import {
-  OWN, OPP, TEAMS, otherTeam, eventError, rallyError, substitutionError, suggestAction, suggestLiberoSwap,
-  suggestPoint, touchOutcome, validLiberoSwaps,
+  OWN, OPP, TEAMS, COACH, POINT_REASONS, causeCandidates, maxTimeouts, otherTeam, eventError, pointReason,
+  rallyError, substitutionError, suggestAction, suggestLiberoSwap, suggestPoint, timeoutError, touchOutcome,
+  validLiberoSwaps,
 } from "./rules.js";
 import { ACTIONS, codesFor, qualityDisplay } from "./ratings.js";
 import { createRadialMenu } from "./radial-menu.js";
 import { zoneAsked, zoneKind } from "./zones.js";
 import { zoneField } from "./zone-picker.js";
-import { playerLabel, touchText } from "./match-format.js";
+import { causeLabel, playerLabel, touchText } from "./match-format.js";
+
+/* ---------- Punkt per Knopf: Grund und Verursacher ---------- */
+
+/*
+  Nach "Punkt …" muss ein Grund gewählt werden (Nutzerentscheidung).
+  Bei Netz, Übertritt und Karte zusätzlich, wer den Fehler gemacht hat:
+  Spieler auf dem Feld direkt antippen, Bank/Trainer in der Leiste.
+  "pendingPoint" merkt sich das (bleibt beim Neuzeichnen erhalten):
+    null  oder  { matchId, winner, reason }   (reason null = Grund noch offen)
+*/
+let pendingPoint = null;
+
+function savePoint(ctx, causeId) {
+  const { winner, reason } = pendingPoint;
+  pendingPoint = null;
+  ctx.addEvent(causeId ? { type: "point", winner, reason, causeId } : { type: "point", winner, reason });
+}
+
+function chooseReason(ctx, reasonId) {
+  pendingPoint.reason = reasonId;
+  if (pointReason(reasonId).needsPerson) ctx.rerender(); // jetzt die Person wählen
+  else savePoint(ctx, null);
+}
+
+// Wer darf als Verursacher gewählt werden? (null = gerade keine Personenwahl)
+function causeChoice(ctx, set) {
+  if (!pendingPoint?.reason || !pointReason(pendingPoint.reason).needsPerson) return null;
+  const team = otherTeam(pendingPoint.winner);
+  const teamIds = ctx.players.filter((p) => p.side === team).map((p) => p.id);
+  return { team, ids: causeCandidates(set, team, pendingPoint.reason, teamIds) };
+}
+
+// Leiste anstelle der Punkt-Knöpfe: erst Grund, dann ggf. Person
+function pointBar(ctx, set) {
+  const loser = otherTeam(pendingPoint.winner);
+  const cancel = el("button", {
+    type: "button", class: "btn", onClick: () => { pendingPoint = null; ctx.rerender(); },
+  }, t("common.cancel"));
+
+  if (!pendingPoint.reason) {
+    return el("div", { class: "zone-bar stack" },
+      el("p", {}, el("strong", {}, tf("point.whyTitle", { team: ctx.names[pendingPoint.winner] })),
+        " ", el("span", { class: "muted small" }, tf("point.whyHint", { team: ctx.names[loser] }))),
+      el("div", { class: "chip-list" }, POINT_REASONS.map((r) =>
+        el("button", { type: "button", class: "btn", onClick: () => chooseReason(ctx, r.id) }, t(`point.reason.${r.id}`)))),
+      el("div", { class: "row-actions" }, cancel),
+    );
+  }
+
+  // Person wählen: Spieler auf dem Feld werden direkt dort angetippt,
+  // alle anderen (Bank, Trainer, Gegner ohne Aufstellung) stehen hier.
+  const choice = causeChoice(ctx, set);
+  const onCourt = set.teams[loser].lineup ?? [];
+  const extra = choice.ids.filter((id) => !onCourt.includes(id));
+  return el("div", { class: "zone-bar stack" },
+    el("p", {}, el("strong", {}, tf("point.whoTitle", {
+      reason: t(`point.reason.${pendingPoint.reason}`), team: ctx.names[loser],
+    })), " ", el("span", { class: "muted small" }, t(onCourt.length ? "point.whoHintCourt" : "point.whoHint"))),
+    extra.length > 0 && el("div", { class: "chip-list" }, extra.map((id) =>
+      el("button", { type: "button", class: "btn", onClick: () => savePoint(ctx, id) },
+        causeLabel(id, ctx.playerById)))),
+    el("div", { class: "row-actions" },
+      el("button", {
+        type: "button", class: "btn", onClick: () => { pendingPoint.reason = null; ctx.rerender(); },
+      }, t("point.otherReason")),
+      cancel,
+    ),
+  );
+}
 
 /* ---------- Kreismenü für die Ballberührung ---------- */
 
@@ -125,7 +196,7 @@ function startTouch(event, ctx, team, playerId) {
   Die genaue Prüfung (passt die Bewertung?) macht rules.js beim Speichern.
 */
 function touchBlocked(set, team) {
-  if (pendingZone) return true; // erst Zone wählen
+  if (pendingZone || pendingPoint) return true; // erst Zone bzw. Punktgrund fertig wählen
   if (rallyError(set)) return true;
   if (!suggestPoint(set)) return false;
   const last = set.rally[set.rally.length - 1];
@@ -148,14 +219,16 @@ export function liveCard(ctx) {
   const { match } = ctx;
   if (panel && panel.matchId !== match.id) panel = null;
   if (pendingZone && pendingZone.matchId !== match.id) pendingZone = null;
+  if (pendingPoint && (pendingPoint.matchId !== match.id || rallyError(set))) pendingPoint = null;
 
   const topTeam = match.ownSideTop ? OWN : OPP;
   const blocker = rallyError(set);
 
-  const pointButtons = el("div", { class: "point-buttons" }, TEAMS.map((team) =>
+  // "Punkt …" öffnet die Abfrage des Grundes (pointBar), gespeichert wird danach
+  const pointButtons = pendingPoint ? pointBar(ctx, set) : el("div", { class: "point-buttons" }, TEAMS.map((team) =>
     el("button", {
       type: "button", class: "btn btn-primary btn-big", disabled: Boolean(blocker || pendingZone),
-      onClick: () => ctx.addEvent({ type: "point", winner: team }),
+      onClick: () => { pendingPoint = { matchId: match.id, winner: team, reason: null }; ctx.rerender(); },
     }, tf("live.point", { team: ctx.names[team] }))));
 
   return el("section", { class: "card stack live" },
@@ -164,7 +237,7 @@ export function liveCard(ctx) {
     el("div", { class: "net" }),
     courtHalf(ctx, set, otherTeam(topTeam), false),
     pendingZone && zoneBar(ctx),
-    !pendingZone && TEAMS.map((team) => suggestionBox(ctx, set, team)),
+    !pendingZone && !pendingPoint && TEAMS.map((team) => suggestionBox(ctx, set, team)),
     blocker === "liberoMustExit" && el("p", { class: "form-warning" }, t("live.liberoBlocks")),
     rallyView(ctx, set),
     pointSuggestion(ctx, set),
@@ -204,9 +277,19 @@ function scoreboard(ctx, set) {
 function courtHalf(ctx, set, team, top) {
   const ts = set.teams[team];
   const label = el("div", { class: "court-label" }, ctx.names[team]);
-  const blocked = touchBlocked(set, team);
+  // Wird gerade der Verursacher eines Punktes gewählt? Dann wählt Antippen die Person.
+  const cause = causeChoice(ctx, set);
+  const causeMode = cause?.team === team;
+  const blocked = causeMode ? false : touchBlocked(set, team);
   // Antippen startet das Kreismenü (pointerdown = Finger oder Maus drückt)
-  const tapHandler = (playerId) => (event) => { if (!blocked) startTouch(event, ctx, team, playerId); };
+  const tapHandler = (playerId) => (event) => {
+    if (causeMode) {
+      event.preventDefault();
+      if (cause.ids.includes(playerId)) savePoint(ctx, playerId);
+    } else if (!blocked) {
+      startTouch(event, ctx, team, playerId);
+    }
+  };
 
   /*
     Wird gerade eine Zone auf DIESER Hälfte gewählt, liegt das Zonenraster über
@@ -233,10 +316,12 @@ function courtHalf(ctx, set, team, top) {
       el("p", { class: "muted small" }, t("live.noLineup")),
       withZone(el("div", { class: "chip-list touch-list" },
         el("button", {
-          type: "button", class: "chip chip-touch chip-team", disabled: blocked, onPointerdown: tapHandler(null),
+          // Als Verursacher zählt nur eine Person, nicht die ganze Mannschaft
+          type: "button", class: "chip chip-touch chip-team", disabled: blocked || causeMode, onPointerdown: tapHandler(null),
         }, tf("live.wholeTeam", { team: ctx.names[team] })),
         players.map((p) => el("button", {
-          type: "button", class: "chip chip-touch", disabled: blocked, onPointerdown: tapHandler(p.id),
+          type: "button", class: `chip chip-touch${causeMode ? " cause-pick" : ""}`, disabled: blocked,
+          onPointerdown: tapHandler(p.id),
         }, playerLabel(p))),
       )),
     );
@@ -246,7 +331,8 @@ function courtHalf(ctx, set, team, top) {
   const spots = order.map((index) => {
     const player = ctx.playerById.get(ts.lineup[index]);
     const isServer = index === 0 && set.serving === team;
-    const classes = ["court-spot", player?.isLibero && "libero", isServer && "server"].filter(Boolean).join(" ");
+    const classes = ["court-spot", player?.isLibero && "libero", isServer && "server", causeMode && "cause-pick"]
+      .filter(Boolean).join(" ");
     return el("button", { type: "button", class: classes, disabled: blocked, onPointerdown: tapHandler(ts.lineup[index]) },
       el("span", { class: "spot-pos" }, index + 1),
       el("span", { class: "spot-number" }, player?.number ?? "?"),
@@ -289,7 +375,7 @@ function pointSuggestion(ctx, set) {
     el("div", { class: "row-actions" },
       el("button", {
         type: "button", class: "btn btn-primary",
-        onClick: () => ctx.addEvent({ type: "point", winner: suggestion.winner }),
+        onClick: () => ctx.addEvent({ type: "point", winner: suggestion.winner, reason: "touch" }),
       }, t("common.ok")),
     ),
     el("p", { class: "muted small" }, t("live.pointSuggestHint")),
@@ -337,11 +423,20 @@ function actionButtons(ctx, set) {
   };
 
   const buttons = [];
+  // Auszeit: für beide Teams, auch ohne Aufstellung; nur zwischen den Ballwechseln
+  for (const team of TEAMS) {
+    buttons.push(el("button", {
+      type: "button", class: "btn", disabled: Boolean(timeoutError(set, team, ctx.match.rules) || pendingPoint),
+      onClick: () => ctx.addEvent({ type: "timeout", team }),
+    }, tf("live.timeoutButton", {
+      team: ctx.names[team], count: set.teams[team].timeouts, max: maxTimeouts(ctx.match.rules),
+    })));
+  }
   for (const team of TEAMS) {
     const ts = set.teams[team];
     if (!ts.lineup) continue; // ohne Aufstellung keine Wechsel
     // Wechsel nur zwischen den Ballwechseln
-    buttons.push(el("button", { type: "button", class: "btn", disabled: set.rally.length > 0, onClick: open("sub", team) },
+    buttons.push(el("button", { type: "button", class: "btn", disabled: set.rally.length > 0 || Boolean(pendingPoint), onClick: open("sub", team) },
       tf("live.subButton", { team: ctx.names[team], count: ts.subCount, max: ctx.match.rules.maxSubstitutions })));
     if (validLiberoSwaps(set, team).length) {
       buttons.push(el("button", { type: "button", class: "btn", onClick: open("libero", team) },

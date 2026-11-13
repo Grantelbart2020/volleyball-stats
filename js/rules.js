@@ -8,7 +8,10 @@
 
   Grundidee: Gespeichert werden nur EREIGNISSE eines Spiels, der Reihe nach:
     { type: "setStart", setNumber, firstServe, lineup: { own, opp }, liberoPartners: { own, opp } }
-    { type: "point", winner }                                  winner: "own" | "opp"
+    { type: "point", winner, reason, causeId }                 winner: "own" | "opp"
+        reason: "touch" (aus der letzten Berührung) oder ein Grund aus POINT_REASONS
+        causeId: wer den Fehler gemacht hat (bei Netz, Übertritt, Karte; "coach" = Trainer)
+    { type: "timeout", team }                                  Auszeit
     { type: "substitution", team, outId, inId, exceptional }   Auswechslung
     { type: "liberoSwap", team, outId, inId }                  Libero-Tausch
     { type: "touch", team, playerId, action, quality, zone }   Ballberührung
@@ -48,6 +51,7 @@ export function defaultRules() {
     pointsDecidingSet: 15, // Punkte im Entscheidungssatz
     minLead: 2,            // nötiger Abstand
     maxSubstitutions: 6,   // Auswechslungen pro Team und Satz
+    maxTimeouts: 2,        // Auszeiten pro Team und Satz
     maxPlayers: 14,        // Spielkader höchstens (inkl. Libero)
     maxLiberos: 2,         // Liberos höchstens
   };
@@ -60,6 +64,7 @@ export const RULE_LIMITS = {
   pointsDecidingSet: [5, 99],
   minLead: [1, 10],
   maxSubstitutions: [0, 99],
+  maxTimeouts: [0, 9],
   maxPlayers: [6, 30],
   maxLiberos: [0, 5],
 };
@@ -165,6 +170,7 @@ function newTeamState(lineup, liberoIds, partners) {
     partners: [...(partners ?? [])], // für wen der Libero normalerweise kommt
     subs: [],              // alle Auswechslungen dieses Satzes
     subCount: 0,           // zählende Auswechslungen
+    timeouts: 0,           // genommene Auszeiten in diesem Satz
     liberoSwapped: false,  // in dieser Pause schon ein Libero-Tausch?
   };
 }
@@ -197,6 +203,7 @@ export function applyEvent(set, event) {
   if (event.type === "point") applyPoint(s, event.winner);
   else if (event.type === "substitution") applySubstitution(s.teams[event.team], event);
   else if (event.type === "liberoSwap") applyLiberoSwap(s.teams[event.team], event);
+  else if (event.type === "timeout") s.teams[event.team].timeouts += 1;
   else if (event.type === "touch") {
     const { team, playerId, action, quality, zone } = event;
     s.rally.push({ team, playerId: playerId ?? null, action, quality, zone: zone ?? null });
@@ -516,6 +523,80 @@ export function substitutionError(set, team, { outId, inId, exceptional }, rules
   return "notAllowed";
 }
 
+/* ---------- Punkt mit Grund ---------- */
+
+/*
+  Gründe für einen Punkt, der sich NICHT aus einer Berührung ergibt.
+  Der Fehler liegt immer beim Team, das den Punkt verliert.
+  needsPerson: Verursacher muss angegeben werden; coach: auch "Trainer" möglich.
+*/
+export const POINT_REASONS = [
+  { id: "net",       needsPerson: true },  // Netzberührung
+  { id: "footFault", needsPerson: true },  // Übertritt
+  { id: "card",      needsPerson: true, coach: true }, // Karte (Strafpunkt)
+  { id: "rotation" },                      // Rotations-/Aufstellungsfehler
+  { id: "libero" },                        // Libero-Fehler
+  { id: "delay" },                         // Verzögerung
+  { id: "other" },                         // Sonstiges / unklar
+];
+
+export const COACH = "coach";
+
+export function pointReason(id) {
+  return POINT_REASONS.find((r) => r.id === id) ?? null;
+}
+
+/*
+  Wer kommt als Verursacher in Frage? (Team = Verlierer des Punktes)
+  - Netz, Übertritt: wer auf dem Feld steht; ohne Aufstellung jeder aus dem Kader
+  - Karte: jeder aus dem Spielkader und der Trainer
+  Gibt eine Liste von ids zurück (inkl. COACH).
+*/
+export function causeCandidates(set, team, reasonId, teamPlayerIds) {
+  const reason = pointReason(reasonId);
+  if (!reason?.needsPerson) return [];
+  if (reason.coach) return [...teamPlayerIds, COACH];
+  const lineup = set.teams[team].lineup;
+  return lineup ? [...lineup] : [...teamPlayerIds];
+}
+
+/*
+  Prüft einen Punkt. Gibt einen Fehlercode zurück oder null.
+  - "touch": nur, wenn die letzte Berührung genau diesen Punkt ergibt
+  - sonst ein Grund aus POINT_REASONS; bei Netz/Übertritt/Karte mit Verursacher
+*/
+export function pointError(set, event, teamPlayerIds) {
+  const blocked = rallyError(set);
+  if (blocked) return blocked;
+  if (!TEAMS.includes(event.winner)) return "unknownTeam";
+  if (event.reason === "touch") {
+    return suggestPoint(set)?.winner === event.winner ? null : "pointNotFromTouch";
+  }
+  const reason = pointReason(event.reason);
+  if (!reason) return "reasonMissing";
+  if (!reason.needsPerson) return event.causeId ? "causeNotAllowed" : null;
+  const loser = otherTeam(event.winner);
+  if (!event.causeId) return "causeMissing";
+  return causeCandidates(set, loser, event.reason, teamPlayerIds).includes(event.causeId) ? null : "causeInvalid";
+}
+
+/* ---------- Auszeit ---------- */
+
+// Höchstzahl Auszeiten (ältere Spiele haben den Regelwert noch nicht -> Standard)
+export function maxTimeouts(rules) {
+  return rules.maxTimeouts ?? defaultRules().maxTimeouts;
+}
+
+// Auszeit nur zwischen den Ballwechseln und höchstens maxTimeouts pro Team und Satz.
+export function timeoutError(set, team, rules) {
+  if (!set) return "noActiveSet";
+  if (set.winner) return "setOver";
+  if (!TEAMS.includes(team)) return "unknownTeam";
+  if (set.rally.length) return "rallyRunning";
+  if (set.teams[team].timeouts >= maxTimeouts(rules)) return "timeoutLimit";
+  return null;
+}
+
 /* ---------- Jedes Ereignis prüfen ---------- */
 
 /*
@@ -527,7 +608,11 @@ export function eventError(matchState, event, players, rules) {
   if (event.type === "setStart") return setStartError(matchState, event, players);
   const set = matchState.activeSet;
   if (!set) return "noActiveSet";
-  if (event.type === "point") return rallyError(set);
+  if (event.type === "point") {
+    const loserIds = players.filter((p) => p.side === otherTeam(event.winner)).map((p) => p.id);
+    return pointError(set, event, loserIds);
+  }
+  if (event.type === "timeout") return timeoutError(set, event.team, rules);
   if (event.type === "substitution") {
     const teamIds = players.filter((p) => p.side === event.team).map((p) => p.id);
     return substitutionError(set, event.team, event, rules, teamIds);

@@ -13,7 +13,7 @@ import {
   OWN, OPP, defaultRules, seasonForDate, checkOwnRoster, isDecidingSet, pointsToWin,
   setWinner, suggestedFirstServe, rotate, lineupError, computeMatch, setStartError,
   validLiberoSwaps, suggestLiberoSwap, liberoSwapError, rallyError, substitutionError, eventError,
-  touchOutcome, suggestPoint, suggestAction, touchError,
+  touchOutcome, suggestPoint, suggestAction, touchError, pointError, timeoutError, COACH,
 } from "../js/rules.js";
 import { CELLS, coarseZone, passBand, zoneAsked, mainZone } from "../js/zones.js";
 import { codesFor, qualityDisplay } from "../js/ratings.js";
@@ -224,7 +224,7 @@ test("Höchstens 6 Auswechslungen, Ausnahmewechsel geht trotzdem", () => {
 test("Doppeltes Antippen: Satz kann nicht zweimal starten, Punkt nur im laufenden Satz", () => {
   const running = state([setStart(1, OWN)]);
   assert.equal(eventError(running, setStart(1, OWN), players, rules), "setRunning");
-  assert.equal(eventError(running, point(OWN), players, rules), null);
+  assert.equal(eventError(running, { ...point(OWN), reason: "rotation" }, players, rules), null);
   const finished = state([setStart(1, OWN), ...points(OWN, 25)]);
   assert.equal(eventError(finished, point(OWN), players, rules), "noActiveSet");
   assert.equal(eventError(running, sub("o2", "o7"), players, rules), null);
@@ -343,6 +343,55 @@ test("Zone wird bei der Berührung geprüft und mitgespeichert", () => {
   assert.equal(check({ ...touch(OWN, "o2", "set", "+"), zone: "C4" }), "zoneNotAllowed");
   const r = state([setStart(1, OWN), { ...touch(OWN, "o1", "serve", "+"), zone: "A1" }]).activeSet;
   assert.equal(r.rally[0].zone, "A1");
+});
+
+/* ---------- Punktgründe und Auszeit ---------- */
+
+test("Punkt per Knopf braucht immer einen Grund", () => {
+  const s = state([setStart(1, OWN)]).activeSet;
+  const check = (e) => pointError(s, e, e.winner === OWN ? oppIds : ownTeamIds); // Verursacher = Verlierer
+  assert.equal(check(point(OWN)), "reasonMissing");
+  assert.equal(check({ ...point(OWN), reason: "rotation" }), null);
+  assert.equal(check({ ...point(OWN), reason: "other" }), null);
+  assert.equal(check({ ...point(OWN), reason: "rotation", causeId: "g1" }), "causeNotAllowed");
+  assert.equal(check({ ...point(OWN), reason: "magic" }), "reasonMissing");
+});
+
+test("Netz, Übertritt, Karte: Verursacher nötig, bei Karte auch Trainer", () => {
+  const s = state([setStart(1, OWN)]).activeSet;
+  // Wir verlieren den Punkt -> Verursacher aus unserem Team
+  const opp = (reason, causeId) => pointError(s, { ...point(OPP), reason, causeId }, ownTeamIds);
+  assert.equal(opp("net"), "causeMissing");
+  assert.equal(opp("net", "o2"), null);           // o2 steht auf dem Feld
+  assert.equal(opp("net", "o7"), "causeInvalid");  // o7 sitzt auf der Bank
+  assert.equal(opp("net", COACH), "causeInvalid");
+  assert.equal(opp("footFault", "o1"), null);
+  assert.equal(opp("card", "o7"), null);           // Karte auch für die Bank
+  assert.equal(opp("card", COACH), null);
+  assert.equal(opp("card", "g1"), "causeInvalid");  // nicht aus dem anderen Team
+  // Gegner ohne Aufstellung: jeder aus dem Gegnerkader
+  assert.equal(pointError(s, { ...point(OWN), reason: "net", causeId: "g4" }, oppIds), null);
+});
+
+test("Punkt aus der Berührung nur, wenn sie ihn ergibt", () => {
+  const ace = state([setStart(1, OWN), touch(OWN, "o1", "serve", "#")]).activeSet;
+  assert.equal(pointError(ace, { ...point(OWN), reason: "touch" }, oppIds), null);
+  assert.equal(pointError(ace, { ...point(OPP), reason: "touch" }, ownTeamIds), "pointNotFromTouch");
+});
+
+test("Auszeit: nur zwischen den Ballwechseln, höchstens 2 pro Satz", () => {
+  const to = { type: "timeout", team: OPP };
+  const s = state([setStart(1, OWN), to]).activeSet;
+  assert.equal(s.teams.opp.timeouts, 1);
+  assert.equal(timeoutError(s, OPP, rules), null);
+  assert.equal(timeoutError(state([setStart(1, OWN), to, to]).activeSet, OPP, rules), "timeoutLimit");
+  assert.equal(timeoutError(state([setStart(1, OWN), touch(OWN, "o1", "serve", "+")]).activeSet, OWN, rules), "rallyRunning");
+  // Ältere Spiele ohne Regelwert: Standard 2
+  const { maxTimeouts, ...oldRules } = rules;
+  assert.equal(timeoutError(state([setStart(1, OWN), to, to]).activeSet, OPP, oldRules), "timeoutLimit");
+  // Neuer Satz: wieder 0
+  const next = state([setStart(1, OWN), to, ...points(OWN, 25), setStart(2, OPP)]).activeSet;
+  assert.equal(next.teams.opp.timeouts, 0);
 });
 
 /* ---------- Zonen und Anzeige der Bewertung ---------- */

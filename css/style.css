@@ -843,7 +843,14 @@ details summary {
   outline: 3px solid var(--accent);
 }
 
-/* Leiste unter dem Spielfeld während der Zonenwahl */
+/* Verursacher eines Punktes wählen: antippbare Spieler hervorheben */
+.court-spot.cause-pick,
+.chip-touch.cause-pick {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 2px var(--warning);
+}
+
+/* Leiste unter dem Spielfeld während der Zonenwahl (auch für den Punktgrund) */
 .zone-bar {
   padding: 8px 12px;
   border: 2px solid var(--accent);
