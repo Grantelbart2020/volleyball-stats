@@ -383,7 +383,7 @@ function attackSection(ctx) {
   const groupCells = (row) => groups.map((g) => [
     el("td", {}, String(row[g].n)),
     el("td", {}, pct(ratio(row[g].kills, row[g].n))),
-    el("td", { class: "total" }, pct(ratio(row[g].kills - row[g].faults, row[g].n))),
+    el("td", { class: "total" }, pct(ratio(row[g].kills - row[g].errors, row[g].n))),
   ]);
   const rows = [...chain.attackers.entries()]
     .sort(([a], [b]) => (ctx.playerById.get(a)?.number ?? 0) - (ctx.playerById.get(b)?.number ?? 0))

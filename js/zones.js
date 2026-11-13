@@ -66,13 +66,13 @@ export function zoneKind(action) {
   Soll nach dieser Berührung die Zone abgefragt werden?
   Nicht, wenn der Ball gar nicht ankommt bzw. kein Ziel hat:
   Annahme/Abwehr "=" (nicht angenommen) oder "/" (direkt zum Gegner),
-  Angriff "/" (geblockt).
+  Angriff "/" (geblockt) oder "=" (Fehler: Aus oder Netz – Nutzerwunsch 13.11.2026).
 */
 export function zoneAsked(action, quality) {
   const kind = zoneKind(action);
   if (!kind) return false;
   if (kind === "pass" && (quality === "=" || quality === "/")) return false;
-  if (action === "attack" && quality === "/") return false;
+  if (action === "attack" && (quality === "/" || quality === "=")) return false; // geblockt oder Fehler
   return true;
 }
 

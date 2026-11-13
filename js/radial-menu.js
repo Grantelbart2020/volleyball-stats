@@ -165,6 +165,16 @@ export function createRadialMenu({ getActionLabel, onCenterTap, onSelect }) {
     }
   });
 
+  /*
+    Langes Drücken: Am Handy öffnet der Browser sonst nach ca. 0,5 s sein
+    Kontextmenü und bricht die Berührung ab ("pointercancel") – das Rad wäre
+    sofort wieder weg. Solange das Rad offen ist, wird das Kontextmenü deshalb
+    überall unterdrückt (nicht nur auf einem bestimmten Spielfeld).
+  */
+  window.addEventListener("contextmenu", (event) => {
+    if (state !== "closed") event.preventDefault();
+  });
+
   // Abbruch durch das System (z. B. eingehender Anruf)
   window.addEventListener("pointercancel", () => {
     if (state === "dragging") close();

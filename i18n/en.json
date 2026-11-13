@@ -361,7 +361,7 @@
   "report.bucket.poor": "poor ball (− ✖ ⚠)",
   "report.bucket.none": "no recorded ball",
   "report.attackTitle": "Chain 3: attack by incoming ball",
-  "report.attackHint": "Incoming ball = own touch directly before the attack, usually the set. Kill = attack point, efficiency = (kills − errors − blocked) / attacks.",
+  "report.attackHint": "Incoming ball = own touch directly before the attack, usually the set. Kill = attack point (#), efficiency = (# − =) / attacks.",
   "report.attacker": "Attacker",
   "report.killRate": "Kill",
   "report.serveTitle": "Chain 4: serve → opponent reception → break",
@@ -373,5 +373,5 @@
   "report.server": "Server",
   "report.aces": "Aces",
   "report.poorReception": "Opp. reception poor",
-  "report.definitions": "Effectiveness = share of the two best grades. Efficiency = (best grade − lost points) / all; lost points are errors, for attacks also blocked, for blocks also net/foot fault. Balance: points = aces, attack and block points; errors = lost points from all actions (including reception, set, dig) plus net, foot fault and card with a cause. Only completed rallies are counted."
+  "report.definitions": "Effectiveness = (# + +) / all. Efficiency = (# − =) / all.Balance: points = aces, attack and block points; errors = lost points from all actions (including reception, set, dig) plus net, foot fault and card with a cause. Only completed rallies are counted."
 }

@@ -94,14 +94,18 @@ test("Gesamttabelle: Zählung, Punkte, Fehler, Verursacher", () => {
   assert.equal(opp.totals.actions.serve.total, 2); // der laufende Ballwechsel zählt nicht
 });
 
-test("Kennzahlen: Effektivität und Effizienz", () => {
+test("Kennzahlen: Effektivität und Effizienz (alte, genormte Formeln)", () => {
   const counts = { total: 10, byCode: { "#": 4, "+": 2, "!": 1, "-": 0, "/": 1, "=": 2 } };
   const attack = actionSummary("attack", counts);
-  assert.equal(attack.effectiveness, 0.6);
-  assert.equal(attack.efficiency, (4 - 1 - 2) / 10); // geblockt und Fehler abziehen
+  assert.equal(attack.effectiveness, 0.6);        // (# + +) / alle
+  assert.equal(attack.efficiency, (4 - 2) / 10);  // (# − =) / alle, "geblockt" zählt nicht
   const serve = actionSummary("serve", counts);
-  assert.equal(serve.effectiveness, 0.5); // ★ und "/" sind die besten beim Aufschlag
+  assert.equal(serve.effectiveness, 0.6);         // auch beim Aufschlag nur # und +
   assert.equal(serve.efficiency, (4 - 2) / 10);
+  // Nachgerechnet mit der alten Auswertung (Annahme: 38 # , 60 +, 6 =, 144 gesamt -> 68 % / 22 %)
+  const old = actionSummary("reception", { total: 144, byCode: { "#": 38, "+": 60, "!": 19, "-": 10, "/": 11, "=": 6 } });
+  assert.equal(Math.round(old.effectiveness * 100), 68);
+  assert.equal(Math.round(old.efficiency * 100), 22);
   assert.equal(actionSummary("set", { total: 0, byCode: counts.byCode }).efficiency, null);
 });
 
@@ -131,12 +135,12 @@ test("Verkettung: Zuspiel nach Vorlage", () => {
 
 test("Verkettung: Angriff nach Vorlage", () => {
   const chain = attackChain(rallies);
-  assert.deepEqual(chain.attackers.get("o4").good, { n: 2, kills: 1, faults: 1 });
+  assert.deepEqual(chain.attackers.get("o4").good, { n: 2, kills: 1, errors: 1 });
   // Angriff ohne Vorlage (erste erfasste Berührung)
   const lonely = collectRallies(rules, players, [
     setStart(1, OPP), touch(OPP, null, "serve", "!"), touch(OWN, "o4", "attack", "#"), point(OWN),
   ]);
-  assert.deepEqual(attackChain(lonely).totals.none, { n: 1, kills: 1, faults: 0 });
+  assert.deepEqual(attackChain(lonely).totals.none, { n: 1, kills: 1, errors: 0 });
 });
 
 test("Verkettung: Aufschlag → gegnerische Annahme → Break", () => {

@@ -361,7 +361,7 @@
   "report.bucket.poor": "Vorlage schlecht (− ✖ ⚠)",
   "report.bucket.none": "ohne Vorlage",
   "report.attackTitle": "Verkettung 3: Angriff nach Vorlage",
-  "report.attackHint": "Vorlage = eigene Berührung direkt vor dem Angriff, meist das Zuspiel. Punkt = Angriffspunkt, Effizienz = (Punkte − Fehler − geblockt) / Angriffe.",
+  "report.attackHint": "Vorlage = eigene Berührung direkt vor dem Angriff, meist das Zuspiel. Punkt = Angriffspunkt (#), Effizienz = (# − =) / Angriffe.",
   "report.attacker": "Angreifer",
   "report.killRate": "Punkt",
   "report.serveTitle": "Verkettung 4: Aufschlag → gegnerische Annahme → Break",
@@ -373,5 +373,5 @@
   "report.server": "Aufschläger",
   "report.aces": "Asse",
   "report.poorReception": "Gegner-Annahme schlecht",
-  "report.definitions": "Effektivität = Anteil der beiden besten Stufen. Effizienz = (beste Stufe − Punktverluste) / alle; Punktverluste sind Fehler, beim Angriff auch geblockt, beim Block auch Netz/Übertritt. Bilanz: Punkte = Asse, Angriffs- und Blockpunkte; Fehler = Punktverluste aller Aktionen (auch Annahme, Zuspiel, Abwehr) sowie Netz, Übertritt und Karte mit Verursacher. Gezählt werden nur abgeschlossene Ballwechsel."
+  "report.definitions": "Effektivität = (# + +) / alle. Effizienz = (# − =) / alle.Bilanz: Punkte = Asse, Angriffs- und Blockpunkte; Fehler = Punktverluste aller Aktionen (auch Annahme, Zuspiel, Abwehr) sowie Netz, Übertritt und Karte mit Verursacher. Gezählt werden nur abgeschlossene Ballwechsel."
 }

@@ -156,21 +156,20 @@ export function playerTable(rallies, team = OWN) {
 }
 
 /*
-  Kennzahlen einer Aktion aus { total, byCode }:
-    effectiveness = Anteil der beiden besten Stufen (★ +)
-    efficiency    = (beste Stufe − Punktverluste) / alle
-  Beispiel Angriff: (Angriffspunkte − Fehler − geblockt) / Angriffe.
-  Beim Aufschlag zählen nach Rang ★ und "/" (sehr positiv) als die beiden besten.
+  Kennzahlen einer Aktion aus { total, byCode } – die üblichen (genormten)
+  Formeln der bisherigen Auswertung des Nutzers, nach CODE:
+    effectiveness = (# + +) / alle
+    efficiency    = (#  −  =) / alle
+  Beispiel Angriff: (Angriffspunkte − Fehler) / Angriffe; "geblockt" (/) zählt
+  dabei weder positiv noch negativ. Beim Aufschlag zählt "/" (sehr positiv)
+  ebenfalls nicht zur Effektivität.
 */
 export function actionSummary(action, counts) {
-  const order = codesFor(action);
-  const best = counts.byCode[order[0]];
-  const good = best + counts.byCode[order[1]];
-  const lost = order.filter((code) => isFault(action, code)).reduce((sum, code) => sum + counts.byCode[code], 0);
+  const { byCode, total } = counts;
   return {
-    total: counts.total,
-    effectiveness: ratio(good, counts.total),
-    efficiency: ratio(best - lost, counts.total),
+    total,
+    effectiveness: ratio(byCode["#"] + byCode["+"], total),
+    efficiency: ratio(byCode["#"] - byCode["="], total),
   };
 }
 
@@ -275,15 +274,16 @@ export function setChain(rallies) {
 
 /*
   B3. Angriff nach Vorlage (meist das Zuspiel)
-  attackers = Map playerId -> { good|medium|poor|none: { n, kills, faults } }
+  attackers = Map playerId -> { good|medium|poor|none: { n, kills, errors } }
     none = Angriff ohne erfasste Vorlage
+    kills = Angriffspunkte (#), errors = Angriffsfehler (=), wie bei der Effizienz
   totals = dasselbe für das ganze Team.
   Ein Angriffspunkt aus schlechter Vorlage ist mehr wert als aus perfekter.
 */
 export const INPUT_GROUPS = [...BUCKETS, "none"];
 
 export function attackChain(rallies) {
-  const emptyRow = () => Object.fromEntries(INPUT_GROUPS.map((g) => [g, { n: 0, kills: 0, faults: 0 }]));
+  const emptyRow = () => Object.fromEntries(INPUT_GROUPS.map((g) => [g, { n: 0, kills: 0, errors: 0 }]));
   const attackers = new Map();
   const totals = emptyRow();
   for (const rally of rallies) {
@@ -294,8 +294,8 @@ export function attackChain(rallies) {
       if (touch.playerId && !attackers.has(touch.playerId)) attackers.set(touch.playerId, emptyRow());
       for (const target of [attackers.get(touch.playerId)?.[group], totals[group]].filter(Boolean)) {
         target.n += 1;
-        if (isPoint("attack", touch.quality)) target.kills += 1;
-        if (isFault("attack", touch.quality)) target.faults += 1;
+        if (touch.quality === "#") target.kills += 1;
+        if (touch.quality === "=") target.errors += 1;
       }
     });
   }

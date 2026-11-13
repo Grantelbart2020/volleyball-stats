@@ -416,6 +416,8 @@ test("Zone wird nur gefragt, wenn der Ball ein Ziel hat", () => {
   assert.equal(zoneAsked("serve", "+"), true);
   assert.equal(zoneAsked("serve", "="), true);    // z. B. AUS
   assert.equal(zoneAsked("attack", "/"), false);  // geblockt
+  assert.equal(zoneAsked("attack", "="), false);  // Angriffsfehler: keine Zone (Nutzerwunsch)
+  assert.equal(zoneAsked("attack", "-"), true);
   assert.equal(zoneAsked("reception", "+"), true);
   assert.equal(zoneAsked("reception", "="), false);
   assert.equal(zoneAsked("dig", "/"), false);     // direkt zum Gegner
