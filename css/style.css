@@ -177,6 +177,7 @@ main {
   z-index: 100;
   background: rgba(0, 0, 0, 0.25);
   touch-action: none;
+  overflow: hidden; /* Zeichenfläche des Fächers darf über den Rand ragen, ohne Scrollen */
 }
 
 .radial-overlay[hidden] {
