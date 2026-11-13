@@ -17,6 +17,7 @@ import { renderTeams } from "./screen-teams.js";
 import { renderTeam } from "./screen-team.js";
 import { renderMatchForm } from "./screen-match-form.js";
 import { renderMatch } from "./screen-match.js";
+import { renderReport } from "./screen-report.js";
 import { renderSettings } from "./screen-settings.js";
 import { renderRadialTest } from "./radial-test.js";
 
@@ -45,6 +46,7 @@ function applyTheme(theme) {
     #/team/<id>/match/new -> neues Spiel anlegen
     #/match/<id>    -> ein Spiel (Kader, Satz starten, Spielstand)
     #/match/<id>/edit -> Spielangaben ändern
+    #/match/<id>/report -> Spielbericht (zum Drucken als PDF)
     #/settings      -> Einstellungen
     #/test          -> Kreismenü-Test
   Vorteil: Der Zurück-Knopf des Browsers bzw. Handys funktioniert ganz normal.
@@ -64,6 +66,8 @@ async function renderRoute() {
       await renderMatchForm(app, { teamId: route[1] });
     } else if ((route = /^#\/match\/([\w-]+)\/edit$/.exec(hash))) {
       await renderMatchForm(app, { matchId: route[1] });
+    } else if ((route = /^#\/match\/([\w-]+)\/report$/.exec(hash))) {
+      await renderReport(app, route[1]);
     } else if ((route = /^#\/match\/([\w-]+)$/.exec(hash))) {
       await renderMatch(app, route[1]);
     } else if (hash === "#/settings") {

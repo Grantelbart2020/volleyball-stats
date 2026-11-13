@@ -150,6 +150,7 @@ function headerCard(ctx) {
     match.note && el("p", { class: "muted small" }, match.note),
     el("div", { class: "row-actions" },
       el("a", { class: "btn", href: `#/match/${match.id}/edit` }, t("common.edit")),
+      state.sets.length > 0 && el("a", { class: "btn", href: `#/match/${match.id}/report` }, t("match.report")),
       el("button", { type: "button", class: "btn", onClick: () => downloadMatch(match) }, t("backup.exportMatch")),
       confirmButton(t("match.delete"), t("common.reallyDelete"), async () => {
         await db.deleteMatch(match.id);

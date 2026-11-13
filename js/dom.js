@@ -27,7 +27,8 @@ export function el(tag, props = {}, ...children) {
     }
   }
 
-  for (const child of children.flat()) {
+  // flat(Infinity): auch Listen in Listen (z. B. Tabellenzellen pro Aktion) werden ausgepackt
+  for (const child of children.flat(Infinity)) {
     if (child === null || child === undefined || child === false) continue;
     node.append(child instanceof Node ? child : String(child));
   }
