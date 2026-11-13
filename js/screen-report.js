@@ -21,11 +21,11 @@ import { el } from "./dom.js";
 import { t, tf, getLanguage } from "./i18n.js";
 import * as db from "./db.js";
 import { OWN, computeMatch } from "./rules.js";
-import { QUALITIES, codesFor } from "./ratings.js";
-import { formatDate, matchResultText, playerLabel } from "./match-format.js";
+import { codesFor, qualityDisplay } from "./ratings.js";
+import { formatDate, matchResultText, playerLabel, qualityLabel, qualityText } from "./match-format.js";
 import {
   BUCKETS, INPUT_GROUPS, SERVE_GROUPS, actionSummary, attackChain, collectRallies, filterSet, phaseStats,
-  playerTable, rankOf, ratio, receptionChain, serveChain, setChain, setNumbers,
+  playerTable, ratio, receptionChain, serveChain, setChain, setNumbers,
 } from "./stats.js";
 
 // Aktionen der beiden Tabellen: direkte Punkte und Ballkontrolle
@@ -53,19 +53,28 @@ function signed(n) {
   return n > 0 ? `+${n}` : String(n);
 }
 
-// Farbe einer Stufe nach Rang (0 = beste)
+/*
+  Rangstufen (0 = beste) ohne feste Aktion, z. B. "Vorlage gut/mittel/schlecht":
+  Farbe und Beschriftung wie beim Zuspiel (++ + = − rüber ✖).
+*/
+function rankLook(rank) {
+  return qualityDisplay(codesFor("set")[rank], "set");
+}
+
 function rankColor(rank) {
-  return QUALITIES[rank]?.color ?? "transparent";
+  return rankLook(rank)?.color ?? "transparent";
 }
 
-// Kopfzelle für einen Code einer Aktion: Code mit farbigem Strich nach Rang
+// Kopfzelle für einen Code einer Aktion: Beschriftung wie im Kreismenü, farbiger Strich
 function codeHeader(action, code) {
-  return el("th", { class: "code-head", style: `border-bottom-color: ${rankColor(rankOf(action, code))}` }, code);
+  const look = qualityDisplay(code, action);
+  return el("th", { class: "code-head", title: code, style: `border-bottom-color: ${look?.color ?? "transparent"}` },
+    look ? qualityLabel(look) : code);
 }
 
-// Kopfzelle für eine Rangstufe (Symbol), z. B. bei der Vorlage
+// Kopfzelle für eine Rangstufe, z. B. bei der Vorlage
 function rankHeader(rank) {
-  return el("th", { class: "code-head", style: `border-bottom-color: ${rankColor(rank)}` }, QUALITIES[rank].symbol);
+  return el("th", { class: "code-head", style: `border-bottom-color: ${rankColor(rank)}` }, qualityLabel(rankLook(rank)));
 }
 
 function section(title, hint, ...content) {
@@ -304,15 +313,12 @@ function receptionSection(ctx) {
 }
 
 /*
-  Zeilenkopf "★ # Perfekt" für eine Stufe einer Aktion.
+  Zeilenkopf "++ Doppelt positiv" für eine Stufe einer Aktion (wie im Kreismenü).
   neutral: ohne Farbe (bei Berührungen des Gegners wäre Grün für uns schlecht)
 */
 function qualityRowHead(action, code, neutral = false) {
-  const rank = rankOf(action, code);
-  const id = QUALITIES.find((q) => q.code === code).id;
-  const color = neutral ? "var(--border)" : rankColor(rank);
-  return el("th", { class: "name quality-row", style: `border-left-color: ${color}` },
-    `${QUALITIES[rank].symbol} ${code} ${t(`quality.${action}.${id}`)}`);
+  const color = neutral ? "var(--border)" : (qualityDisplay(code, action)?.color ?? "transparent");
+  return el("th", { class: "name quality-row", style: `border-left-color: ${color}` }, qualityText(code, action));
 }
 
 /* ---------- B2. Zuspiel nach Vorlage ---------- */
@@ -329,7 +335,7 @@ function setSection(ctx) {
     if (!n) return null;
     return el("tr", {},
       el("th", { class: "name quality-row", style: `border-left-color: ${rankColor(rank)}` },
-        `${QUALITIES[rank].symbol} ${t(`report.rank.${rank}`)}`),
+        t(`report.rank.${rank}`)),
       row.map((c) => el("td", {}, count(c))),
       el("td", {}, String(n)),
       el("td", { class: "total" }, pct(ratio(row[0] + row[1], n))),

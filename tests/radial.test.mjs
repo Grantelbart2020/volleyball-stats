@@ -63,6 +63,38 @@ test("ganz am Rand: Mittelpunkt rückt nur so weit nach innen, dass die Mitte si
   assert.equal(layout.cy, 300);
 });
 
+test("5 Stücke (Block): voller Kreis mit 72° pro Stück, Stück 0 oben", () => {
+  const layout = menuLayout(400, 400, 800, 800, 5);
+  assert.equal(layout.count, 5);
+  assert.equal(segmentAt(...dir(0), layout), 0);
+  assert.equal(segmentAt(...dir(72), layout), 1);
+  assert.equal(segmentAt(...dir(288), layout), 4);
+  // auch im Fächer sind alle 5 erreichbar
+  const fan = menuLayout(70, 300, 400, 600, 5);
+  const found = new Set();
+  for (let a = 0; a < 360; a += 2) {
+    const index = segmentAt(...dir(a), fan);
+    if (index !== null) found.add(index);
+  }
+  assert.deepEqual([...found].sort(), [0, 1, 2, 3, 4]);
+});
+
+test("Beschriftung pro Aktion (ratings.js)", async () => {
+  const { menuCodes, qualityDisplay } = await import("../js/ratings.js");
+  assert.deepEqual(menuCodes("block"), ["#", "+", "!", "-", "="]); // ohne "/"
+  assert.deepEqual(menuCodes("serve"), ["#", "/", "+", "!", "-", "="]);
+  assert.equal(qualityDisplay("#", "serve").key, "look.ace");
+  assert.equal(qualityDisplay("/", "serve").text, "++");
+  assert.equal(qualityDisplay("#", "reception").text, "++");
+  assert.equal(qualityDisplay("/", "reception").key, "look.freeballOver");
+  assert.equal(qualityDisplay("/", "set").key, "look.over");
+  assert.equal(qualityDisplay("/", "attack").text, "✋");
+  assert.equal(qualityDisplay("/", "dig").key, "look.freeball");
+  assert.equal(qualityDisplay("!", "set").text, "=");      // "=" heißt im Rad: mittel
+  assert.equal(qualityDisplay("=", "attack").text, "✖");   // Fehler
+  assert.equal(qualityDisplay("/", "block").text, "/");    // alte Daten bleiben lesbar
+});
+
 test("knapp neben dem Fächer zählt noch als erstes bzw. letztes Stück", () => {
   const layout = menuLayout(70, 300, 400, 600);
   const before = layout.start - 10; // 10° vor Beginn des Bogens

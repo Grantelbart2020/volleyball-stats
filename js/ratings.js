@@ -17,7 +17,8 @@
   Ergebnis. Deshalb gibt es pro Aktion eine Reihenfolge der Codes (CODE_ORDER).
 */
 
-// Die 6 Ränge: Anzeige im Kreismenü, im Ballwechsel und im Verlauf.
+// Die 6 Ränge (Reihenfolge = wie gut). Symbol/Farbe hier nur noch für Legenden
+// im Bericht; die Anzeige pro Aktion liefert qualityDisplay (siehe unten).
 export const QUALITIES = [
   { code: "#", id: "perfect",  symbol: "★", color: "var(--q-perfect)" },
   { code: "+", id: "positive", symbol: "+", color: "var(--q-positive)" },
@@ -42,15 +43,54 @@ export function codesFor(action) {
 }
 
 /*
-  Anzeige einer Bewertung für eine Aktion:
-  { code, id, symbol, color }
-    symbol, color = nach Rang (wie gut)
-    id            = Name des Codes, für den Text "quality.<aktion>.<id>"
-  Beispiel Aufschlag "/": Symbol "+", hellgrün, Text "Sehr positiv".
+  Stufen, die das Kreismenü für eine Aktion anbietet (Nutzerfestlegung 13.11.2026):
+  Beim Block entfällt "/" (Übertritt/Netz werden über die Punktgründe erfasst).
+  Ältere Block-Berührungen mit "/" bleiben gültig und zählen in der Auswertung
+  weiter (dort gilt codesFor).
 */
+export function menuCodes(action) {
+  const codes = codesFor(action);
+  return action === "block" ? codes.filter((code) => code !== "/") : codes;
+}
+
+/*
+  Aussehen einer Bewertung pro Aktion (Nutzerfestlegung 13.11.2026), damit
+  auch Neue verstehen, was gemeint ist:
+    Punkt (Ass / #)  dunkelgrün       ++  grün        +  hellgrün
+    =  gelb (mittel)   −  orange      ✖  grau (Fehler)
+    Freeball / rüber / geblockt (✋)  blau – der Ball geht zum Gegner
+  Ergebnis: { code, id, color, text, key }
+    text = sprachneutrales Zeichen ("++", "✖" …) ODER
+    key  = Schlüssel in den Sprachdateien ("look.ace" …) für Wörter
+    id   = Name des Codes, für den langen Text "quality.<aktion>.<id>"
+*/
+const COLORS = {
+  point: "var(--q-point)", plus2: "var(--q-plus2)", plus: "var(--q-plus)",
+  mid: "var(--q-mid)", minus: "var(--q-minus)", over: "var(--q-over)", error: "var(--q-error)",
+};
+
+function look(code, action) {
+  switch (code) {
+    case "#":
+      if (action === "serve") return { key: "look.ace", color: COLORS.point };
+      if (action === "attack" || action === "block") return { text: "#", color: COLORS.point };
+      return { text: "++", color: COLORS.plus2 };
+    case "/":
+      if (action === "serve") return { text: "++", color: COLORS.plus2 };
+      if (action === "reception") return { key: "look.freeballOver", color: COLORS.over };
+      if (action === "set") return { key: "look.over", color: COLORS.over };
+      if (action === "attack") return { text: "✋", color: COLORS.over }; // geblockt
+      if (action === "block") return { text: "/", color: COLORS.over };  // nur alte Daten
+      return { key: "look.freeball", color: COLORS.over };              // Abwehr, Freeball
+    case "+": return { text: "+", color: COLORS.plus };
+    case "!": return { text: "=", color: COLORS.mid };
+    case "-": return { text: "−", color: COLORS.minus };
+    default:  return { text: "✖", color: COLORS.error };              // "=" Fehler
+  }
+}
+
 export function qualityDisplay(code, action) {
-  const rank = codesFor(action).indexOf(code);
-  if (rank < 0) return null;
+  if (!codesFor(action).includes(code)) return null;
   const byCode = QUALITIES.find((q) => q.code === code);
-  return { code, id: byCode.id, symbol: QUALITIES[rank].symbol, color: QUALITIES[rank].color };
+  return { code, id: byCode.id, ...look(code, action) };
 }

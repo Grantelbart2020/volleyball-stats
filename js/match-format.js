@@ -14,17 +14,31 @@ export function zoneText(zone) {
   return tf("zone.named", { zone });
 }
 
+// Kurze Beschriftung einer Bewertung (wie im Kreismenü): "++", "✖", "Ass", "Freeball" …
+export function qualityLabel(quality) {
+  return quality.key ? t(quality.key) : quality.text;
+}
+
+/*
+  Bewertung als Text: Zeichen + Name der Stufe ("++ Doppelt positiv"),
+  bei Wörtern nur das Wort ("Ass", "Freeball rüber"), das sagt schon alles.
+*/
+export function qualityText(code, action) {
+  const quality = qualityDisplay(code, action);
+  if (!quality) return code;
+  return quality.key ? t(quality.key) : `${quality.text} ${t(`quality.${action}.${quality.id}`)}`;
+}
+
 /*
   Eine Ballberührung als Text, z. B. "#7 Anna: Annahme + Positiv · Zone B3".
   Der Name der Stufe kommt aus der Bewertungsgrundlage und hängt von der Aktion ab
   ("quality.<aktion>.<id>"). Ohne Spieler (playerId null) steht der Name der Mannschaft da.
 */
 export function touchText(touch, names, playerById) {
-  const quality = qualityDisplay(touch.quality, touch.action);
   const text = tf("event.touch", {
     who: touch.playerId ? playerLabel(playerById.get(touch.playerId)) : names[touch.team],
     action: t(`action.${touch.action}`),
-    quality: quality ? `${quality.symbol} ${t(`quality.${touch.action}.${quality.id}`)}` : touch.quality,
+    quality: qualityText(touch.quality, touch.action),
   });
   return touch.zone ? `${text} · ${zoneText(touch.zone)}` : text;
 }
