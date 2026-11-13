@@ -7,6 +7,8 @@
   Inhalt:
     opponentMode  "players" = Gegnerspieler einzeln erfassen (Standard)
                   "team"    = nur die Gegner-Mannschaft insgesamt
+    zoneMode      "coarse" = grobe Zonen (Standard): Hauptzonen 1–9 bzw. Farbzonen
+                  "fine"   = feines Raster: 36 Unterzonen (siehe zones.js)
     rules         Standard-Regelwerte für neue Spiele (siehe rules.js)
 */
 import { defaultRules } from "./rules.js";
@@ -43,6 +45,7 @@ export function getSettings() {
   }
   return {
     opponentMode: stored.opponentMode === "team" ? "team" : "players",
+    zoneMode: stored.zoneMode === "fine" ? "fine" : "coarse",
     rules: { ...defaultRules(), ...stored.rules },
   };
 }

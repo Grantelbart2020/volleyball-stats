@@ -11,9 +11,10 @@
     { type: "point", winner }                                  winner: "own" | "opp"
     { type: "substitution", team, outId, inId, exceptional }   Auswechslung
     { type: "liberoSwap", team, outId, inId }                  Libero-Tausch
-    { type: "touch", team, playerId, action, quality }         Ballberührung
+    { type: "touch", team, playerId, action, quality, zone }   Ballberührung
         playerId: null = "die Mannschaft" (Gegner ohne Aufstellung)
         quality: Standardcode aus ratings.js ("#", "+", "!", "-", "/", "=")
+        zone: optional, siehe zones.js ("C4", "4", "P#", "out" ...)
   Ein Ballwechsel sind alle Berührungen seit dem letzten Punkt. Er wird nicht
   extra gespeichert, sondern ergibt sich aus der Reihenfolge der Ereignisse.
   Den aktuellen Stand (Spielstand, wer wo steht, wie viele Wechsel ...) rechnet
@@ -28,6 +29,7 @@
 */
 
 import { ACTIONS, QUALITIES } from "./ratings.js";
+import { zoneError } from "./zones.js";
 
 export const OWN = "own";
 export const OPP = "opp";
@@ -196,8 +198,8 @@ export function applyEvent(set, event) {
   else if (event.type === "substitution") applySubstitution(s.teams[event.team], event);
   else if (event.type === "liberoSwap") applyLiberoSwap(s.teams[event.team], event);
   else if (event.type === "touch") {
-    const { team, playerId, action, quality } = event;
-    s.rally.push({ team, playerId: playerId ?? null, action, quality });
+    const { team, playerId, action, quality, zone } = event;
+    s.rally.push({ team, playerId: playerId ?? null, action, quality, zone: zone ?? null });
   }
   return s;
 }
@@ -370,14 +372,33 @@ export function rallyError(set) {
 
 /*
   Beendet diese Berührung den Ballwechsel? Gibt das Team zurück, das den Punkt
-  bekommt, oder null.
+  bekommt, oder null. Grundlage ist die Bewertungsgrundlage:
   - Fehler (=) bei jeder Aktion: Punkt für das andere Team
   - Perfekt (#) bei Aufschlag (Ass), Angriff (Angriffspunkt), Block (Blockpunkt):
     Punkt für das eigene Team
+  - Angriff "/" (geblockt, Gegner macht den Punkt) und Block "/" (Übertritt,
+    Netz, Antenne): Punkt für das andere Team
 */
 export function touchOutcome(touch) {
   if (touch.quality === "=") return otherTeam(touch.team);
   if (touch.quality === "#" && ["serve", "attack", "block"].includes(touch.action)) return touch.team;
+  if (touch.quality === "/" && ["attack", "block"].includes(touch.action)) return otherTeam(touch.team);
+  return null;
+}
+
+/*
+  Nach einer entscheidenden Berührung darf noch EINE "Spiegel-Berührung" des
+  anderen Teams folgen, die zum selben Punkt führt, z. B.
+    Angriff "/" (geblockt)  ->  Block "#" des Gegners
+    Aufschlag "#" (Ass)     ->  Annahme "=" des Gegners
+  Gibt einen Fehlercode zurück oder null.
+*/
+function mirrorTouchError(set, touch) {
+  const last = set.rally[set.rally.length - 1];
+  const previous = set.rally.length >= 2 ? set.rally[set.rally.length - 2] : null;
+  if (previous && touchOutcome(previous)) return "rallyDecided"; // Spiegel schon erfasst
+  if (touch.team === last.team) return "rallyDecided";
+  if (touchOutcome(touch) !== touchOutcome(last)) return "mirrorMismatch";
   return null;
 }
 
@@ -427,7 +448,7 @@ export function suggestAction(set, team, playerId) {
   teamPlayerIds: alle Spieler dieses Teams im Spielkader.
   Regeln:
   - nur wenn der Ballwechsel gespielt werden darf (rallyError)
-  - nicht mehr, wenn die letzte Berührung den Punkt schon entschieden hat
+  - ist der Punkt schon entschieden, nur noch die passende Spiegel-Berührung
   - Spieler muss auf dem Feld stehen; ohne Aufstellung: Spieler aus dem Kader
     oder die Mannschaft (playerId null)
   - Aufschlag nur als erste Berührung, nur vom Aufschlagteam, nur von Position 1
@@ -438,7 +459,12 @@ export function touchError(set, touch, teamPlayerIds) {
   if (!TEAMS.includes(touch.team)) return "unknownTeam";
   if (!ACTIONS.includes(touch.action)) return "unknownAction";
   if (!QUALITIES.some((q) => q.code === touch.quality)) return "unknownQuality";
-  if (suggestPoint(set)) return "rallyDecided";
+  const zoneProblem = zoneError(touch.action, touch.zone);
+  if (zoneProblem) return zoneProblem;
+  if (suggestPoint(set)) {
+    const mirror = mirrorTouchError(set, touch);
+    if (mirror) return mirror;
+  }
 
   const lineup = set.teams[touch.team].lineup;
   if (lineup) {

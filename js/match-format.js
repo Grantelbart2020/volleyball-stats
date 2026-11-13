@@ -3,19 +3,30 @@
   (Datum, Ergebnis, Spieler, Ereignisse). Wird von mehreren Bildschirmen benutzt.
 */
 import { t, tf, getLanguage } from "./i18n.js";
-import { qualityByCode } from "./ratings.js";
+import { qualityDisplay } from "./ratings.js";
+import { BAND_NAMES, OUT } from "./zones.js";
+
+// Zone als Text: "AUS", "Zone 4", "Zone C4", "grüne Zone"
+export function zoneText(zone) {
+  if (!zone) return "";
+  if (zone === OUT) return t("zone.out");
+  if (zone.startsWith("P")) return t(`zone.band.${BAND_NAMES[zone.slice(1)]}`);
+  return tf("zone.named", { zone });
+}
 
 /*
-  Eine Ballberührung als Text, z. B. "#7 Anna: Annahme + Positiv".
-  Ohne Spieler (playerId null) steht der Name der Mannschaft da.
+  Eine Ballberührung als Text, z. B. "#7 Anna: Annahme + Positiv · Zone B3".
+  Der Name der Stufe kommt aus der Bewertungsgrundlage und hängt von der Aktion ab
+  ("quality.<aktion>.<id>"). Ohne Spieler (playerId null) steht der Name der Mannschaft da.
 */
 export function touchText(touch, names, playerById) {
-  const quality = qualityByCode(touch.quality);
-  return tf("event.touch", {
+  const quality = qualityDisplay(touch.quality, touch.action);
+  const text = tf("event.touch", {
     who: touch.playerId ? playerLabel(playerById.get(touch.playerId)) : names[touch.team],
     action: t(`action.${touch.action}`),
-    quality: quality ? `${quality.symbol} ${t(`quality.${quality.id}`)}` : touch.quality,
+    quality: quality ? `${quality.symbol} ${t(`quality.${touch.action}.${quality.id}`)}` : touch.quality,
   });
+  return touch.zone ? `${text} · ${zoneText(touch.zone)}` : text;
 }
 
 // "2026-11-12T19:30" -> "12.11.2026, 19:30" (bzw. englisches Format)

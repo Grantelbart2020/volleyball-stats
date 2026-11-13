@@ -3,6 +3,7 @@
   Adresse: #/settings
 
   - Gegner erfassen: einzelne Spieler oder nur die Mannschaft
+  - Zonenraster: grob (Standard) oder fein (36 Unterzonen)
   - Standard-Regelwerte für NEUE Spiele (bestehende Spiele behalten ihre Regeln)
 */
 import { el, showError } from "./dom.js";
@@ -18,6 +19,10 @@ export function renderSettings(container) {
     ["players", "team"].map((value) =>
       el("option", { value, selected: settings.opponentMode === value }, t(`settings.opponentMode.${value}`))),
   );
+  const zoneSelect = el("select", {},
+    ["coarse", "fine"].map((value) =>
+      el("option", { value, selected: settings.zoneMode === value }, t(`settings.zoneMode.${value}`))),
+  );
   const rules = rulesFields(settings.rules);
   const error = el("p", { class: "form-error", hidden: true });
   const saved = el("p", { class: "form-ok", hidden: true }, t("settings.saved"));
@@ -30,12 +35,14 @@ export function renderSettings(container) {
       const result = rules.read();
       if (result.error) return showError(error, result.error);
       showError(error, null);
-      saveSettings({ opponentMode: modeSelect.value, rules: result.rules });
+      saveSettings({ opponentMode: modeSelect.value, zoneMode: zoneSelect.value, rules: result.rules });
       saved.hidden = false;
     },
   },
     el("label", { class: "field" }, el("span", {}, t("settings.opponentMode")), modeSelect),
     el("p", { class: "muted small" }, t("settings.opponentModeHint")),
+    el("label", { class: "field" }, el("span", {}, t("settings.zoneMode")), zoneSelect),
+    el("p", { class: "muted small" }, t("settings.zoneModeHint")),
     el("h3", {}, t("settings.defaultRules")),
     el("p", { class: "muted small" }, t("settings.defaultRulesHint")),
     rules.element,
@@ -46,7 +53,7 @@ export function renderSettings(container) {
       el("button", {
         type: "button", class: "btn",
         onClick: () => {
-          saveSettings({ opponentMode: modeSelect.value, rules: defaultRules() });
+          saveSettings({ opponentMode: modeSelect.value, zoneMode: zoneSelect.value, rules: defaultRules() });
           renderSettings(container);
         },
       }, t("settings.resetRules")),

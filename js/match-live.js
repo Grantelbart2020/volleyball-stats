@@ -10,11 +10,13 @@ import { el, showError } from "./dom.js";
 import { t, tf } from "./i18n.js";
 import * as db from "./db.js";
 import {
-  OWN, OPP, TEAMS, otherTeam, rallyError, substitutionError, suggestAction, suggestLiberoSwap,
-  suggestPoint, validLiberoSwaps,
+  OWN, OPP, TEAMS, otherTeam, eventError, rallyError, substitutionError, suggestAction, suggestLiberoSwap,
+  suggestPoint, touchOutcome, validLiberoSwaps,
 } from "./rules.js";
-import { ACTIONS, qualityByCode } from "./ratings.js";
+import { ACTIONS, codesFor, qualityDisplay } from "./ratings.js";
 import { createRadialMenu } from "./radial-menu.js";
+import { zoneAsked, zoneKind } from "./zones.js";
+import { openZonePicker } from "./zone-picker.js";
 import { playerLabel, touchText } from "./match-format.js";
 
 /* ---------- Kreismenü für die Ballberührung ---------- */
@@ -37,14 +39,48 @@ function getMenu() {
         const next = (ACTIONS.indexOf(touchDraft.action) + 1) % ACTIONS.length;
         touchDraft.action = ACTIONS[next];
       },
-      onSelect: ({ quality }) => {
-        const { ctx, team, playerId, action } = touchDraft;
+      // Segment 0–5 -> Code; beim Aufschlag ist die Reihenfolge anders (ratings.js)
+      onSelect: ({ index }) => {
+        const draft = touchDraft;
         touchDraft = null;
-        ctx.addEvent({ type: "touch", team, playerId, action, quality: quality.code });
+        const touch = {
+          type: "touch", team: draft.team, playerId: draft.playerId,
+          action: draft.action, quality: codesFor(draft.action)[index],
+        };
+        // Erst prüfen: Eine Berührung, die ohnehin abgelehnt wird, braucht keine Zone.
+        // (addEvent zeigt den Fehler dann an.)
+        const { ctx } = draft;
+        const problem = eventError(ctx.state, touch, ctx.players, ctx.match.rules);
+        if (!problem && zoneAsked(touch.action, touch.quality)) askZone(ctx, touch);
+        else ctx.addEvent(touch);
       },
     });
   }
   return menu;
+}
+
+/*
+  Zweiter Schritt: Zone wählen (oder "Ohne Zone"). Gespeichert wird die
+  Berührung erst danach, als EIN Ereignis.
+  Aufschlag/Angriff: Zone auf der Feldhälfte des Gegners.
+  Annahme/Abwehr:    Zone auf der eigenen Feldhälfte (wo der Ball ankommt).
+*/
+function askZone(ctx, touch) {
+  const kind = zoneKind(touch.action);
+  const half = kind === "target" ? otherTeam(touch.team) : touch.team;
+  const topTeam = ctx.match.ownSideTop ? OWN : OPP;
+  const quality = qualityDisplay(touch.quality, touch.action);
+  openZonePicker({
+    kind,
+    mode: ctx.settings.zoneMode,
+    rotated: half === topTeam,
+    title: tf("zone.title", {
+      action: t(`action.${touch.action}`),
+      quality: `${quality.symbol} ${t(`quality.${touch.action}.${quality.id}`)}`,
+      team: ctx.names[half],
+    }),
+    onPick: (zone) => ctx.addEvent(zone ? { ...touch, zone } : touch),
+  });
 }
 
 // Finger setzt auf einem Spieler (oder "Mannschaft") auf -> Kreismenü mit Aktionsvorschlag
@@ -55,9 +91,19 @@ function startTouch(event, ctx, team, playerId) {
   getMenu().start(event, { team, playerId });
 }
 
-// Darf gerade eine Berührung erfasst werden? (nicht bei Libero-Pflicht oder entschiedenem Ballwechsel)
-function touchBlocked(set) {
-  return Boolean(rallyError(set) || suggestPoint(set));
+/*
+  Darf gerade eine Berührung dieses Teams erfasst werden?
+  Nicht bei Libero-Pflicht. Ist der Ballwechsel schon entschieden, nur noch
+  EINE Spiegel-Berührung des anderen Teams (z. B. Blockpunkt nach "geblockt").
+  Die genaue Prüfung (passt die Bewertung?) macht rules.js beim Speichern.
+*/
+function touchBlocked(set, team) {
+  if (rallyError(set)) return true;
+  if (!suggestPoint(set)) return false;
+  const last = set.rally[set.rally.length - 1];
+  const previous = set.rally.length >= 2 ? set.rally[set.rally.length - 2] : null;
+  const mirrorDone = previous && touchOutcome(previous);
+  return Boolean(mirrorDone) || last.team === team;
 }
 
 /*
@@ -92,6 +138,8 @@ export function liveCard(ctx) {
     blocker === "liberoMustExit" && el("p", { class: "form-warning" }, t("live.liberoBlocks")),
     rallyView(ctx, set),
     pointSuggestion(ctx, set),
+    // Wurde die letzte Eingabe abgelehnt (z. B. unpassende Spiegel-Berührung)? Einmal anzeigen.
+    ctx.problem && el("p", { class: "form-error" }, t(`error.${ctx.problem}`)),
     pointButtons,
     el("p", { class: "muted small" }, t("live.pointHint")),
     actionButtons(ctx, set),
@@ -126,7 +174,7 @@ function scoreboard(ctx, set) {
 function courtHalf(ctx, set, team, top) {
   const ts = set.teams[team];
   const label = el("div", { class: "court-label" }, ctx.names[team]);
-  const blocked = touchBlocked(set);
+  const blocked = touchBlocked(set, team);
   // Antippen startet das Kreismenü (pointerdown = Finger oder Maus drückt)
   const tapHandler = (playerId) => (event) => { if (!blocked) startTouch(event, ctx, team, playerId); };
 
@@ -176,7 +224,7 @@ function rallyView(ctx, set) {
   }
   return el("ol", { class: "rally" }, set.rally.map((touch) =>
     el("li", {},
-      el("span", { class: "log-dot", style: `background: ${qualityByCode(touch.quality)?.color ?? "transparent"}` }),
+      el("span", { class: "log-dot", style: `background: ${qualityDisplay(touch.quality, touch.action)?.color ?? "transparent"}` }),
       touchText(touch, ctx.names, ctx.playerById),
     )));
 }
