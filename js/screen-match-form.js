@@ -83,6 +83,23 @@ export async function renderMatchForm(container, { teamId, matchId }) {
   const opponentInput = el("input", {
     type: "text", maxLength: 60, value: match?.opponent ?? "", placeholder: t("match.opponentPlaceholder"),
   });
+
+  /*
+    Gegner aus der Teamliste wählen (alle Teams außer dem eigenen) oder frei eintippen.
+    Mit Team: Name kommt vom Team, der Gegnerkader aus dessen Saison-Kader.
+  */
+  const otherTeams = (await db.listTeams()).filter((other) => other.id !== team.id);
+  const opponentTeamSelect = el("select", {
+    onChange: () => {
+      const chosen = otherTeams.find((other) => other.id === opponentTeamSelect.value);
+      if (chosen) opponentInput.value = chosen.name;
+      opponentInput.disabled = Boolean(chosen);
+    },
+  },
+    el("option", { value: "" }, t("match.opponentFree")),
+    otherTeams.map((other) => el("option", { value: other.id, selected: match?.opponentTeamId === other.id }, other.name)),
+  );
+  opponentInput.disabled = Boolean(match?.opponentTeamId && otherTeams.some((o) => o.id === match.opponentTeamId));
   const dateInput = el("input", { type: "datetime-local", value: match?.date ?? toLocalInputValue(new Date()) });
   const homeAwaySelect = el("select", {},
     ["", "home", "away"].map((value) =>
@@ -112,15 +129,20 @@ export async function renderMatchForm(container, { teamId, matchId }) {
         season: seasonForDate(new Date(date)),
         date,
         opponent,
+        opponentTeamId: opponentTeamSelect.value || null,
         homeAway: homeAwaySelect.value || null,
         competition: competitionInput.value.trim(),
         note: noteInput.value.trim(),
         rules: started ? match.rules : ruleResult.rules,
       });
+      // Gegner ist ein angelegtes Team: dessen Saison-Kader übernehmen (nur fehlende Nummern)
+      await db.copyOpponentRoster(saved);
       location.hash = `#/match/${saved.id}`;
     },
   },
+    otherTeams.length > 0 && el("label", { class: "field" }, el("span", {}, t("match.opponentTeam")), opponentTeamSelect),
     el("label", { class: "field" }, el("span", {}, t("match.opponent")), opponentInput),
+    otherTeams.length > 0 && el("p", { class: "muted small" }, t("match.opponentTeamHint")),
     el("label", { class: "field" }, el("span", {}, t("match.date")), dateInput),
     el("p", { class: "muted small" }, t("match.seasonHint")),
     el("label", { class: "field" }, el("span", {}, t("match.homeAway")), homeAwaySelect),

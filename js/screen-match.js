@@ -401,9 +401,8 @@ function oppRosterCard(ctx) {
       const number = parseNumber(numberInput.value);
       if (number === null) return showError(error, t("error.numberFormat"));
       if (opp.some((p) => p.number === number)) return showError(error, t("error.numberTakenMatch"));
-      await db.addMatchPlayer({
-        matchId: match.id, side: OPP, number, name: nameInput.value.trim(), isLibero: liberoInput.checked,
-      });
+      // Bei verknüpftem Gegnerteam landet der Spieler auch in dessen Saison-Kader (db.js)
+      await db.addOpponentPlayer(match, { number, name: nameInput.value.trim(), isLibero: liberoInput.checked });
       ctx.rerender();
     },
   },
@@ -413,8 +412,22 @@ function oppRosterCard(ctx) {
     el("button", { type: "submit", class: "btn btn-primary" }, t("roster.addButton")),
   );
 
+  // Gegner ist ein angelegtes Team: Hinweis und Knopf, um fehlende Spieler aus dem Saison-Kader zu holen
+  const linked = match.opponentTeamId && el("div", { class: "row-actions" },
+    el("span", { class: "muted small grow" }, tf("oppRoster.linked", { team: match.opponent, season: match.season })),
+    el("button", {
+      type: "button", class: "btn",
+      onClick: async () => {
+        const added = await db.copyOpponentRoster(match);
+        if (!added) return showError(error, t("oppRoster.nothingToCopy"));
+        ctx.rerender();
+      },
+    }, t("oppRoster.copyMissing")),
+  );
+
   return el("section", { class: "card" },
     el("h3", {}, tf("oppRoster.title", { team: match.opponent, count: opp.length })),
+    linked,
     opp.length ? el("ul", { class: "roster" }, rows) : el("p", { class: "muted" }, t("oppRoster.empty")),
     opp.length < 6 && el("p", { class: "form-warning" }, t("set.needOppPlayers")),
     el("h3", {}, t("oppRoster.add")),

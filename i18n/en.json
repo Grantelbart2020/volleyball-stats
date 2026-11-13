@@ -270,5 +270,11 @@
   "error.causeInvalid": "This person cannot be chosen as the cause.",
   "error.causeNotAllowed": "No person is recorded for this reason.",
   "error.pointNotFromTouch": "The last contact does not give this point.",
-  "error.timeoutLimit": "All time-outs of this set have been used."
+  "error.timeoutLimit": "All time-outs of this set have been used.",
+  "match.opponentTeam": "Opponent from team list",
+  "match.opponentFree": "– enter name freely –",
+  "match.opponentTeamHint": "With a saved team, its season roster becomes the opponent roster. Opponent players added during the match are saved to that roster as well.",
+  "oppRoster.linked": "Linked to team {team}, season {season}. New players are saved there as well.",
+  "oppRoster.copyMissing": "Add missing players from roster",
+  "oppRoster.nothingToCopy": "All players of the season roster are already in the opponent roster."
 }

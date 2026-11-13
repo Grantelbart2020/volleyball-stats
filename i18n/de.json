@@ -270,5 +270,11 @@
   "error.causeInvalid": "Diese Person kommt als Verursacher nicht in Frage.",
   "error.causeNotAllowed": "Für diesen Grund wird keine Person erfasst.",
   "error.pointNotFromTouch": "Die letzte Berührung ergibt diesen Punkt nicht.",
-  "error.timeoutLimit": "Alle Auszeiten dieses Satzes sind verbraucht."
+  "error.timeoutLimit": "Alle Auszeiten dieses Satzes sind verbraucht.",
+  "match.opponentTeam": "Gegner aus der Teamliste",
+  "match.opponentFree": "– Name frei eingeben –",
+  "match.opponentTeamHint": "Mit einem angelegten Team wird sein Saison-Kader als Gegnerkader übernommen. Im Spiel neu eingetragene Gegnerspieler landen auch in diesem Kader.",
+  "oppRoster.linked": "Verknüpft mit dem Team {team}, Saison {season}. Neue Spieler werden auch dort gespeichert.",
+  "oppRoster.copyMissing": "Fehlende aus dem Kader übernehmen",
+  "oppRoster.nothingToCopy": "Alle Spieler aus dem Saison-Kader sind schon im Gegnerkader."
 }
