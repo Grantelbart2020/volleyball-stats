@@ -3,6 +3,20 @@
   (Datum, Ergebnis, Spieler, Ereignisse). Wird von mehreren Bildschirmen benutzt.
 */
 import { t, tf, getLanguage } from "./i18n.js";
+import { qualityByCode } from "./ratings.js";
+
+/*
+  Eine Ballberührung als Text, z. B. "#7 Anna: Annahme + Positiv".
+  Ohne Spieler (playerId null) steht der Name der Mannschaft da.
+*/
+export function touchText(touch, names, playerById) {
+  const quality = qualityByCode(touch.quality);
+  return tf("event.touch", {
+    who: touch.playerId ? playerLabel(playerById.get(touch.playerId)) : names[touch.team],
+    action: t(`action.${touch.action}`),
+    quality: quality ? `${quality.symbol} ${t(`quality.${quality.id}`)}` : touch.quality,
+  });
+}
 
 // "2026-11-12T19:30" -> "12.11.2026, 19:30" (bzw. englisches Format)
 export function formatDate(value) {
@@ -40,6 +54,8 @@ export function eventText(event, names, playerById) {
         { team: names[event.team], in: p(event.inId), out: p(event.outId) });
     case "liberoSwap":
       return tf("event.liberoSwap", { team: names[event.team], in: p(event.inId), out: p(event.outId) });
+    case "touch":
+      return touchText(event, names, playerById);
     default:
       return event.type;
   }

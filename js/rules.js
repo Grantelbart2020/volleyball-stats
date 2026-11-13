@@ -11,6 +11,11 @@
     { type: "point", winner }                                  winner: "own" | "opp"
     { type: "substitution", team, outId, inId, exceptional }   Auswechslung
     { type: "liberoSwap", team, outId, inId }                  Libero-Tausch
+    { type: "touch", team, playerId, action, quality }         Ballberührung
+        playerId: null = "die Mannschaft" (Gegner ohne Aufstellung)
+        quality: Standardcode aus ratings.js ("#", "+", "!", "-", "/", "=")
+  Ein Ballwechsel sind alle Berührungen seit dem letzten Punkt. Er wird nicht
+  extra gespeichert, sondern ergibt sich aus der Reihenfolge der Ereignisse.
   Den aktuellen Stand (Spielstand, wer wo steht, wie viele Wechsel ...) rechnet
   computeMatch() jedes Mal aus dieser Liste neu aus, wie eine Excel-Formel aus
   ihren Zeilen. "Rückgängig" heißt dann einfach: letztes Ereignis löschen.
@@ -21,6 +26,8 @@
     4  3  2      vorne:  Index 3, 2, 1
     5  6  1      hinten: Index 4, 5, 0
 */
+
+import { ACTIONS, QUALITIES } from "./ratings.js";
 
 export const OWN = "own";
 export const OPP = "opp";
@@ -169,6 +176,7 @@ export function startSet(event, rules, liberoIds) {
     serving: event.firstServe,
     score: { own: 0, opp: 0 },
     rallies: 0,
+    rally: [],             // Berührungen des laufenden Ballwechsels
     winner: null,
     teams: {
       own: newTeamState(event.lineup.own, liberoIds.own, event.liberoPartners?.own),
@@ -187,12 +195,17 @@ export function applyEvent(set, event) {
   if (event.type === "point") applyPoint(s, event.winner);
   else if (event.type === "substitution") applySubstitution(s.teams[event.team], event);
   else if (event.type === "liberoSwap") applyLiberoSwap(s.teams[event.team], event);
+  else if (event.type === "touch") {
+    const { team, playerId, action, quality } = event;
+    s.rally.push({ team, playerId: playerId ?? null, action, quality });
+  }
   return s;
 }
 
 function applyPoint(s, winner) {
   s.score[winner] += 1;
   s.rallies += 1;
+  s.rally = []; // Ballwechsel ist vorbei
   for (const team of TEAMS) s.teams[team].liberoSwapped = false; // neue Pause
   // Seitenwechsel beim Aufschlag ("Side-out"): Wer den Aufschlag zurückholt, rotiert.
   if (winner !== s.serving) {
@@ -302,6 +315,7 @@ export function requiredLiberoExit(set, team) {
 export function validLiberoSwaps(set, team) {
   const ts = set.teams[team];
   if (!ts.lineup || ts.liberoIds.length === 0 || set.winner) return [];
+  if (set.rally.length) return []; // nur zwischen den Ballwechseln
 
   const required = requiredLiberoExit(set, team);
   if (required) return [{ outId: required.outId, inId: required.inId }];
@@ -352,6 +366,95 @@ export function rallyError(set) {
   return null;
 }
 
+/* ---------- Ballberührungen ---------- */
+
+/*
+  Beendet diese Berührung den Ballwechsel? Gibt das Team zurück, das den Punkt
+  bekommt, oder null.
+  - Fehler (=) bei jeder Aktion: Punkt für das andere Team
+  - Perfekt (#) bei Aufschlag (Ass), Angriff (Angriffspunkt), Block (Blockpunkt):
+    Punkt für das eigene Team
+*/
+export function touchOutcome(touch) {
+  if (touch.quality === "=") return otherTeam(touch.team);
+  if (touch.quality === "#" && ["serve", "attack", "block"].includes(touch.action)) return touch.team;
+  return null;
+}
+
+/*
+  Vorschlag für den Punkt aus der letzten Berührung des Ballwechsels:
+  { winner, touch } oder null. Die App fragt dann nur noch "OK?".
+*/
+export function suggestPoint(set) {
+  const last = set?.rally[set.rally.length - 1];
+  if (!last) return null;
+  const winner = touchOutcome(last);
+  return winner ? { winner, touch: last } : null;
+}
+
+// Nach einer Berührung des EIGENEN Teams: was kommt als Nächstes (gleiches Team)?
+const NEXT_SAME_TEAM = {
+  reception: "set", dig: "set", freeball: "set", set: "attack",
+  attack: "dig", block: "dig", serve: "dig",
+};
+
+/*
+  Vorschlag für die Aktion, wenn ein Spieler angetippt wird.
+  Grundlage ist die letzte Berührung im Ballwechsel:
+  - noch keine:        Aufschlagteam -> Aufschlag, anderes Team -> Annahme
+  - gleiches Team:     Annahme/Abwehr/Freeball -> Zuspiel, Zuspiel -> Angriff, ...
+  - anderes Team:      Aufschlag -> Annahme; Angriff -> Block (Spieler vorne)
+                       oder Abwehr (Spieler hinten); Block -> Abwehr;
+                       sonst kam der Ball "frei" herüber -> Freeball
+  Der Vorschlag lässt sich im Kreismenü über die Mitte ändern.
+*/
+export function suggestAction(set, team, playerId) {
+  const last = set.rally[set.rally.length - 1];
+  if (!last) return set.serving === team ? "serve" : "reception";
+  if (last.team === team) return NEXT_SAME_TEAM[last.action] ?? "dig";
+  if (last.action === "serve") return "reception";
+  if (last.action === "attack") {
+    const lineup = set.teams[team].lineup;
+    const index = lineup && playerId ? lineup.indexOf(playerId) : -1;
+    return isFrontRow(index) ? "block" : "dig";
+  }
+  if (last.action === "block") return "dig";
+  return "freeball";
+}
+
+/*
+  Prüft eine Berührung. Gibt einen Fehlercode zurück oder null.
+  teamPlayerIds: alle Spieler dieses Teams im Spielkader.
+  Regeln:
+  - nur wenn der Ballwechsel gespielt werden darf (rallyError)
+  - nicht mehr, wenn die letzte Berührung den Punkt schon entschieden hat
+  - Spieler muss auf dem Feld stehen; ohne Aufstellung: Spieler aus dem Kader
+    oder die Mannschaft (playerId null)
+  - Aufschlag nur als erste Berührung, nur vom Aufschlagteam, nur von Position 1
+*/
+export function touchError(set, touch, teamPlayerIds) {
+  const blocked = rallyError(set);
+  if (blocked) return blocked;
+  if (!TEAMS.includes(touch.team)) return "unknownTeam";
+  if (!ACTIONS.includes(touch.action)) return "unknownAction";
+  if (!QUALITIES.some((q) => q.code === touch.quality)) return "unknownQuality";
+  if (suggestPoint(set)) return "rallyDecided";
+
+  const lineup = set.teams[touch.team].lineup;
+  if (lineup) {
+    if (!lineup.includes(touch.playerId)) return "notOnCourt";
+  } else if (touch.playerId !== null && !teamPlayerIds.includes(touch.playerId)) {
+    return "notInRoster";
+  }
+
+  if (touch.action === "serve") {
+    if (set.rally.length) return "serveNotFirst";
+    if (touch.team !== set.serving) return "notServing";
+    if (lineup && lineup[0] !== touch.playerId) return "notServer";
+  }
+  return null;
+}
+
 /* ---------- Auswechslung ---------- */
 
 /*
@@ -368,6 +471,7 @@ export function substitutionError(set, team, { outId, inId, exceptional }, rules
   const ts = set.teams[team];
   if (!ts.lineup) return "noLineup";
   if (set.winner) return "setOver";
+  if (set.rally.length) return "rallyRunning"; // nur zwischen den Ballwechseln
   if (!ts.lineup.includes(outId)) return "notOnCourt";
   if (ts.liberoIds.includes(outId) || ts.liberoIds.includes(inId)) return "liberoNoSub";
   if (!teamPlayerIds.includes(inId)) return "notInRoster";
@@ -403,5 +507,9 @@ export function eventError(matchState, event, players, rules) {
     return substitutionError(set, event.team, event, rules, teamIds);
   }
   if (event.type === "liberoSwap") return liberoSwapError(set, event.team, event.outId, event.inId);
+  if (event.type === "touch") {
+    const teamIds = players.filter((p) => p.side === event.team).map((p) => p.id);
+    return touchError(set, event, teamIds);
+  }
   return "unknownEvent";
 }
