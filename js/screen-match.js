@@ -221,13 +221,29 @@ function backupReminder(ctx) {
     vorne:  Pos. 4 | Pos. 3 | Pos. 2
     hinten: Pos. 5 | Pos. 6 | Pos. 1
   Gibt { element, read } zurück; read() liefert die 6 ids (Index 0 = Pos. 1).
+  Ein Spieler, der schon auf einer Position steht, wird in den anderen
+  Feldern ausgeblendet (Nutzerwunsch 13.11.2026).
 */
 function lineupPicker(players, preset, labelKey) {
   const selects = [0, 1, 2, 3, 4, 5].map((index) =>
-    el("select", {},
+    el("select", { onChange: hideTaken },
       el("option", { value: "" }, "–"),
       players.map((p) => el("option", { value: p.id, selected: preset?.[index] === p.id }, playerLabel(p))),
     ));
+
+  // Gewählte Spieler in den ANDEREN Feldern ausblenden. "disabled" zusätzlich,
+  // weil manche Browser (Safari) ausgeblendete Einträge trotzdem anzeigen.
+  function hideTaken() {
+    selects.forEach((select) => {
+      const takenElsewhere = new Set(selects.filter((s) => s !== select && s.value).map((s) => s.value));
+      for (const option of select.options) {
+        const taken = takenElsewhere.has(option.value);
+        option.hidden = taken;
+        option.disabled = taken;
+      }
+    });
+  }
+  hideTaken(); // auch für die Vorbelegung aus dem letzten Satz
   const cell = (index) => el("label", { class: "field" },
     el("span", { class: "small" }, tf(labelKey, { n: index + 1 })), selects[index]);
   return {
