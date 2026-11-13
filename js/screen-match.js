@@ -22,6 +22,7 @@ import {
 import { getSettings } from "./settings.js";
 import { eventText, formatDate, matchResultText, playerLabel } from "./match-format.js";
 import { liveCard } from "./match-live.js";
+import { downloadFullBackup, downloadMatch, lastBackupAt } from "./backup-actions.js";
 
 /*
   Warteschlange zum Speichern: Ereignisse werden streng nacheinander gespeichert.
@@ -98,6 +99,7 @@ export async function renderMatch(container, matchId) {
   container.replaceChildren(...[
     el("a", { class: "back-link", href: `#/team/${match.teamId}` }, `← ${ctx.names.own}`),
     headerCard(ctx),
+    backupReminder(ctx),
     state.activeSet && liveCard(ctx),
     state.nextSetNumber && setStartCard(ctx),
     events.length > 0 && undoCard(ctx),
@@ -148,12 +150,34 @@ function headerCard(ctx) {
     match.note && el("p", { class: "muted small" }, match.note),
     el("div", { class: "row-actions" },
       el("a", { class: "btn", href: `#/match/${match.id}/edit` }, t("common.edit")),
+      el("button", { type: "button", class: "btn", onClick: () => downloadMatch(match) }, t("backup.exportMatch")),
       confirmButton(t("match.delete"), t("common.reallyDelete"), async () => {
         await db.deleteMatch(match.id);
         location.hash = `#/team/${match.teamId}`;
       }),
     ),
   );
+}
+
+/*
+  Nach Spielende: Sicherung anbieten, wenn die letzte Sicherung älter ist als
+  das letzte Ereignis dieses Spiels (lokale Browserdaten können verloren gehen).
+*/
+function backupReminder(ctx) {
+  if (!ctx.state.matchOver) return null;
+  const lastEvent = ctx.events[ctx.events.length - 1];
+  const last = lastBackupAt();
+  if (last && lastEvent && last > lastEvent.createdAt) return null;
+  const card = el("section", { class: "card suggestion" },
+    el("p", {}, t("backup.reminder")),
+    el("div", { class: "row-actions" },
+      el("button", {
+        type: "button", class: "btn btn-primary",
+        onClick: async () => { await downloadFullBackup(); card.remove(); },
+      }, t("backup.save")),
+    ),
+  );
+  return card;
 }
 
 /* ---------- 2. Satz starten ---------- */

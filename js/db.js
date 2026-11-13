@@ -445,6 +445,29 @@ export function addMatchEvent(matchId, data) {
   });
 }
 
+/* ---------- Sicherung und Import (Logik in backup.js) ---------- */
+
+const ALL_STORES = ["teams", "persons", "rosterEntries", "matches", "matchPlayers", "matchEvents"];
+
+// Liest ALLE Daten (für die Sicherung): { teams: [...], persons: [...], ... }
+export function exportAll() {
+  return run(ALL_STORES, "readonly", (s) =>
+    Object.fromEntries(ALL_STORES.map((name) => [name, s[name].getAll()])));
+}
+
+/*
+  Speichert die geplanten Einträge eines Imports (put aus backup.planImport)
+  in EINER Transaktion: Entweder kommt alles an oder gar nichts.
+  put() = einfügen oder ersetzen (gleiche id).
+*/
+export function importData(put) {
+  return run(ALL_STORES, "readwrite", (s) => {
+    for (const name of ALL_STORES) {
+      for (const item of put[name] ?? []) s[name].put(item);
+    }
+  });
+}
+
 // "Rückgängig": löscht das letzte Ereignis des Spiels.
 export function deleteLastMatchEvent(matchId) {
   return run("matchEvents", "readwrite", (s) => {

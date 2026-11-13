@@ -843,6 +843,25 @@ details summary {
   outline: 3px solid var(--accent);
 }
 
+/* Vorschau beim Einlesen einer Sicherung */
+.backup-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.backup-table th,
+.backup-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+
+.backup-table th:first-child,
+.backup-table td:first-child {
+  text-align: left;
+}
+
 /* Verursacher eines Punktes wählen: antippbare Spieler hervorheben */
 .court-spot.cause-pick,
 .chip-touch.cause-pick {

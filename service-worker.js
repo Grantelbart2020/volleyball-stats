@@ -18,7 +18,7 @@
   Größere Umbauten?       -> CACHE_VERSION um 1 erhöhen, dann wird alles frisch geladen.
 */
 
-const CACHE_VERSION = 8;
+const CACHE_VERSION = 9;
 const CACHE_NAME = `vbstats-v${CACHE_VERSION}`;
 
 // Alle Dateien, die die App zum Laufen braucht (Pfade relativ zu diesem Skript).
@@ -45,6 +45,8 @@ const APP_FILES = [
   "js/screen-settings.js",
   "js/zones.js",
   "js/zone-picker.js",
+  "js/backup.js",
+  "js/backup-actions.js",
   "i18n/de.json",
   "i18n/en.json",
   "icons/icon-192.png",
