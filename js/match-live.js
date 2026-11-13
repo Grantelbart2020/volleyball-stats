@@ -214,7 +214,18 @@ let panel = null;
 // Libero-Vorschläge, die mit "Kein Wechsel" weggeklickt wurden (bis zum nächsten Ballwechsel).
 const dismissed = new Set();
 
-export function liveCard(ctx) {
+/*
+  Die Live-Seite (#/match/<id>/live): füllt genau den Bildschirm und scrollt
+  nicht (style.css, body.live-mode). Aufbau von oben nach unten:
+    1. Kopf:   ☰ Spiel (zur Spielseite) | Spielstand | ↶ Rückgängig
+    2. Spielfeld: passt sich der Bildschirmhöhe an
+    3. Info:   Zonen-/Grundabfrage, Vorschläge, laufender Ballwechsel, Fehler,
+               Wechsel-/Libero-Auswahl (nur DIESER Bereich scrollt, wenn nötig)
+    4. Fuß:    Punkt-Knöpfe und Werkzeuge (Auszeit, Wechsel, Libero, Seiten)
+  Alles andere (Kader, Verlauf, Bearbeiten, Export, Löschen) steht auf der
+  Spielseite.
+*/
+export function liveScreen(ctx) {
   const set = ctx.state.activeSet;
   const { match } = ctx;
   if (panel && panel.matchId !== match.id) panel = null;
@@ -224,30 +235,50 @@ export function liveCard(ctx) {
   const topTeam = match.ownSideTop ? OWN : OPP;
   const blocker = rallyError(set);
 
-  // "Punkt …" öffnet die Abfrage des Grundes (pointBar), gespeichert wird danach
-  const pointButtons = pendingPoint ? pointBar(ctx, set) : el("div", { class: "point-buttons" }, TEAMS.map((team) =>
+  // "Punkt …" öffnet die Abfrage des Grundes (pointBar im Info-Bereich), gespeichert wird danach
+  const pointButtons = !pendingPoint && el("div", { class: "point-buttons" }, TEAMS.map((team) =>
     el("button", {
       type: "button", class: "btn btn-primary btn-big", disabled: Boolean(blocker || pendingZone),
       onClick: () => { pendingPoint = { matchId: match.id, winner: team, reason: null }; ctx.rerender(); },
     }, tf("live.point", { team: ctx.names[team] }))));
 
-  return el("section", { class: "card stack live" },
+  const head = el("div", { class: "live-head" },
+    el("a", { class: "btn btn-small", href: `#/match/${match.id}` }, `☰ ${t("live.menu")}`),
     scoreboard(ctx, set),
-    courtHalf(ctx, set, topTeam, true),
-    el("div", { class: "net" }),
-    courtHalf(ctx, set, otherTeam(topTeam), false),
-    pendingZone && zoneBar(ctx),
-    !pendingZone && !pendingPoint && TEAMS.map((team) => suggestionBox(ctx, set, team)),
-    blocker === "liberoMustExit" && el("p", { class: "form-warning" }, t("live.liberoBlocks")),
-    rallyView(ctx, set),
-    pointSuggestion(ctx, set),
-    // Wurde die letzte Eingabe abgelehnt (z. B. unpassende Spiegel-Berührung)? Einmal anzeigen.
-    ctx.problem && el("p", { class: "form-error" }, t(`error.${ctx.problem}`)),
-    pointButtons,
-    el("p", { class: "muted small" }, t("live.pointHint")),
-    actionButtons(ctx, set),
-    panel?.type === "sub" && subPanel(ctx, set, panel.team),
-    panel?.type === "libero" && liberoPanel(ctx, set, panel.team),
+    el("button", {
+      type: "button", class: "btn btn-small", title: t("undo.button"), "aria-label": t("undo.button"),
+      onClick: async () => {
+        pendingZone = null;
+        pendingPoint = null;
+        await db.deleteLastMatchEvent(match.id);
+        ctx.rerender();
+      },
+    }, "↶"),
+  );
+
+  return el("div", { class: "live-screen" },
+    head,
+    el("div", { class: "live-court" },
+      courtHalf(ctx, set, topTeam, true),
+      el("div", { class: "net" }),
+      courtHalf(ctx, set, otherTeam(topTeam), false),
+    ),
+    el("div", { class: "live-info" },
+      pendingZone && zoneBar(ctx),
+      pendingPoint && pointBar(ctx, set),
+      !pendingZone && !pendingPoint && TEAMS.map((team) => suggestionBox(ctx, set, team)),
+      blocker === "liberoMustExit" && el("p", { class: "form-warning" }, t("live.liberoBlocks")),
+      // Wurde die letzte Eingabe abgelehnt (z. B. unpassende Spiegel-Berührung)? Einmal anzeigen.
+      ctx.problem && el("p", { class: "form-error" }, t(`error.${ctx.problem}`)),
+      pointSuggestion(ctx, set),
+      panel?.type === "sub" && subPanel(ctx, set, panel.team),
+      panel?.type === "libero" && liberoPanel(ctx, set, panel.team),
+      rallyView(ctx, set),
+    ),
+    el("div", { class: "live-foot" },
+      pointButtons,
+      actionButtons(ctx, set),
+    ),
   );
 }
 
@@ -451,7 +482,8 @@ function actionButtons(ctx, set) {
     },
   }, `⇅ ${t("live.swapSides")}`));
 
-  return el("div", { class: "row-actions" }, buttons);
+  // Eine Zeile, bei Bedarf seitlich wischbar (die Seite selbst scrollt nicht)
+  return el("div", { class: "live-tools" }, buttons);
 }
 
 /* ---------- Auswechslung ---------- */

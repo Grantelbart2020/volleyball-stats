@@ -10,6 +10,8 @@
     2a. Finger wird in eine Richtung gezogen und losgelassen -> Stufe gewählt.
     2b. Finger wird ohne Bewegung losgelassen -> Rad bleibt offen,
         nächster Tipp: Segment = auswählen, Mitte = Aktion wechseln, außerhalb = abbrechen.
+    2c. Bricht das System die Berührung ab (pointercancel), bleibt das Rad
+        ebenfalls offen wie bei 2b – es verschwindet nie "von selbst".
 */
 import { QUALITIES } from "./ratings.js";
 
@@ -108,6 +110,7 @@ export function createRadialMenu({ getActionLabel, onCenterTap, onSelect }) {
   let player = null;        // der angetippte Spieler
   let cx = 0, cy = 0;       // Mittelpunkt des Rads auf dem Bildschirm
   let highlighted = null;   // aktuell markiertes Segment (0–5) oder null
+  let pointerId = null;     // der Finger, der das Rad geöffnet hat (andere Finger zählen nicht)
 
   function highlight(index) {
     highlighted = index;
@@ -119,6 +122,7 @@ export function createRadialMenu({ getActionLabel, onCenterTap, onSelect }) {
     overlay.hidden = true;
     highlight(null);
     player = null;
+    pointerId = null;
   }
 
   function select(index) {
@@ -145,19 +149,37 @@ export function createRadialMenu({ getActionLabel, onCenterTap, onSelect }) {
     highlight(null);
     overlay.hidden = false;
     state = "dragging";
+    pointerId = event.pointerId;
+    /*
+      "Pointer capture": Alle weiteren Bewegungen dieses Fingers gehen an das
+      Overlay, nicht mehr an den Spielerknopf. Wird der Bildschirm darunter
+      neu gezeichnet (z. B. weil die vorige Eingabe gerade gespeichert wurde),
+      verliert das Rad den Finger dadurch nicht.
+    */
+    try {
+      overlay.setPointerCapture(event.pointerId);
+    } catch {
+      // ältere Browser oder synthetische Ereignisse: dann ohne Capture
+    }
+  }
+
+  // Gehört dieses Ereignis zum Finger, der das Rad geöffnet hat?
+  // (Ein zweiter Finger, z. B. der Daumen am Rand, soll nichts auslösen.)
+  function isOwnPointer(event) {
+    return pointerId === null || event.pointerId === pointerId;
   }
 
   // ---------- Finger bewegt sich (nur beim Ziehen) ----------
   window.addEventListener("pointermove", (event) => {
-    if (state !== "dragging") return;
+    if (state !== "dragging" || !isOwnPointer(event)) return;
     const dx = event.clientX - cx, dy = event.clientY - cy;
     const distance = Math.hypot(dx, dy); // Abstand zum Mittelpunkt (Pythagoras)
     highlight(distance > DEADZONE ? segmentFromOffset(dx, dy) : null);
   });
 
   // ---------- Finger hoch ----------
-  window.addEventListener("pointerup", () => {
-    if (state !== "dragging") return;
+  window.addEventListener("pointerup", (event) => {
+    if (state !== "dragging" || !isOwnPointer(event)) return;
     if (highlighted !== null) {
       select(highlighted);   // gezogen -> auswählen
     } else {
@@ -175,9 +197,15 @@ export function createRadialMenu({ getActionLabel, onCenterTap, onSelect }) {
     if (state !== "closed") event.preventDefault();
   });
 
-  // Abbruch durch das System (z. B. eingehender Anruf)
-  window.addEventListener("pointercancel", () => {
-    if (state === "dragging") close();
+  /*
+    Abbruch durch das System (z. B. Scrollgeste, langes Drücken, Anruf):
+    Das Rad bleibt offen und wartet auf einen Tipp, statt zu verschwinden.
+    Abbrechen geht dann mit einem Tipp außerhalb.
+  */
+  window.addEventListener("pointercancel", (event) => {
+    if (state !== "dragging" || !isOwnPointer(event)) return;
+    highlight(null);
+    state = "open";
   });
 
   // ---------- Tipp, während das Rad offen ist ----------

@@ -1160,3 +1160,202 @@ main:has(.report) {
     break-inside: avoid;
   }
 }
+
+/* =====================================================================
+   Live-Seite (#/match/<id>/live): ganzer Bildschirm, ohne Scrollen
+   ===================================================================== */
+
+/*
+  body.live-mode setzt screen-match.js, solange die Live-Seite zu sehen ist.
+  100dvh = genau die sichtbare Höhe (am Handy ohne die Adressleiste).
+  overflow: hidden = die Seite selbst scrollt nicht. Nur der Info-Bereich
+  und die Werkzeugleiste dürfen bei Bedarf in sich scrollen.
+*/
+body.live-mode {
+  height: 100vh;   /* Ersatz für ältere Browser ohne dvh */
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none; /* kein "Ziehen zum Aktualisieren" */
+}
+
+body.live-mode .topbar {
+  display: none;
+}
+
+body.live-mode main {
+  height: 100%;
+  padding: 6px 8px;
+}
+
+.live-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 1. Kopf: Menü | Spielstand | Rückgängig */
+.live-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-head .scoreboard {
+  gap: 6px;
+}
+
+.live-head > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.live-head .score-points {
+  font-size: 1.8rem;
+}
+
+.live-head .score-name {
+  font-size: 0.8rem;
+}
+
+.live-head .scoreboard + p {
+  margin: 0;
+  font-size: 0.7rem;
+}
+
+.btn-small {
+  min-height: 40px;
+  padding: 0 10px;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  flex: 0 0 auto;
+}
+
+/* 2. Spielfeld: nimmt den freien Platz, beide Hälften gleich hoch */
+.live-court {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.live-court .court-half {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.live-court .court-label {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.live-court .lineup-court {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.live-court .court-spot {
+  min-height: 0;
+}
+
+.live-court .zone-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+.live-court .touch-list {
+  overflow-y: auto;
+}
+
+.live-court .net {
+  flex: 0 0 auto;
+  margin: 4px 0;
+}
+
+/* 3. Info: Abfragen, Vorschläge, laufender Ballwechsel – scrollt in sich */
+.live-info {
+  flex: 0 1 auto;
+  max-height: 38%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.live-info:empty {
+  display: none;
+}
+
+.live-info > p {
+  margin: 0;
+}
+
+.live-info .suggestion,
+.live-info .zone-bar,
+.live-info .panel {
+  padding: 8px;
+}
+
+/* Ballwechsel kompakt: Berührungen nebeneinander statt untereinander */
+.live-info .rally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+}
+
+/* 4. Fuß: Punkt-Knöpfe und Werkzeuge */
+.live-foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.live-foot .btn-big {
+  min-height: 48px;
+}
+
+/* Werkzeuge in einer Zeile, bei Bedarf seitlich wischbar */
+.live-tools {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.live-tools .btn {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 10px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+/* Spielseite: großer Knopf zurück zur Live-Eingabe */
+.btn-live {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 12px 0;
+  text-decoration: none;
+}
+
+/* Zonenwahl: die Hälfte mit dem Raster bekommt mehr Platz als die andere */
+.live-court .court-half:has(.zone-wrap) {
+  flex-grow: 1.7;
+}
+
+/* Hinweis "Ohne Aufstellung erfasst" kostet live nur Platz */
+.live-court .court-half > p.muted {
+  display: none;
+}

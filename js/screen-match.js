@@ -1,11 +1,13 @@
 /*
   screen-match.js – ein Spiel.
-  Adresse: #/match/<id>
+  Adressen: #/match/<id>       Spielseite
+            #/match/<id>/live  Live-Eingabe, solange ein Satz läuft (match-live.js),
+                               ganzer Bildschirm ohne Scrollen
 
-  Aufbau von oben nach unten:
-  1. Kopf: Gegner, Datum, Ergebnis, Bearbeiten, Löschen
-  2. Läuft ein Satz: Spielfeld mit Spielstand (match-live.js)
-     Sonst: nächsten Satz starten (Aufschlag, Aufstellung, Libero-Partner)
+  Aufbau der Spielseite von oben nach unten:
+  1. Kopf: Gegner, Datum, Ergebnis, ▶ Live-Eingabe (wenn ein Satz läuft),
+     Bearbeiten, Bericht, Export, Löschen
+  2. Kein Satz läuft: nächsten Satz starten (Aufschlag, Aufstellung, Libero-Partner)
   3. Rückgängig (letztes Ereignis löschen)
   4. Spielkader (aus dem Saison-Kader) und Gegnerkader
   5. Verlauf (alle Ereignisse)
@@ -21,7 +23,7 @@ import {
 } from "./rules.js";
 import { getSettings } from "./settings.js";
 import { eventText, formatDate, matchResultText, playerLabel } from "./match-format.js";
-import { liveCard } from "./match-live.js";
+import { liveScreen } from "./match-live.js";
 import { downloadFullBackup, downloadMatch, lastBackupAt } from "./backup-actions.js";
 
 /*
@@ -33,6 +35,9 @@ let saveQueue = Promise.resolve();
 
 // Fehlercode der zuletzt abgelehnten Eingabe; wird beim nächsten Zeichnen einmal angezeigt.
 let lastProblem = null;
+
+// Nach "Satz starten": Spiel-id, damit danach direkt die Live-Seite kommt.
+let goLiveAfterStart = null;
 
 /*
   Speichert ein Ereignis, wenn es zum FRISCH aus der Datenbank berechneten Stand
@@ -57,7 +62,13 @@ async function saveEvent(match, players, event) {
   return null;
 }
 
-export async function renderMatch(container, matchId) {
+/*
+  options.live = true: Live-Seite (#/match/<id>/live) statt der Spielseite.
+  Die Live-Seite gibt es nur, solange ein Satz läuft. Danach geht es
+  automatisch zur Spielseite (nächster Satz, Sicherung, Bericht ...).
+*/
+export async function renderMatch(container, matchId, options = {}) {
+  let live = Boolean(options.live);
   const match = await db.getMatch(matchId);
   if (!match) {
     container.replaceChildren(
@@ -73,6 +84,21 @@ export async function renderMatch(container, matchId) {
     db.listRoster(match.teamId, match.season),
   ]);
   const state = computeMatch(match.rules, players, events);
+
+  // Satz gerade gestartet -> zur Live-Seite (als neuer Schritt, "Zurück" führt hierher)
+  if (!live && goLiveAfterStart === match.id && state.activeSet) {
+    goLiveAfterStart = null;
+    location.hash = `#/match/${match.id}/live`;
+    return;
+  }
+  // Satz vorbei (oder rückgängig gemacht) -> Live-Seite durch die Spielseite ersetzen
+  if (live && !state.activeSet) {
+    history.replaceState(null, "", `#/match/${match.id}`);
+    live = false;
+  }
+  // Ohne Kopfzeile und ohne Scrollen, solange die Live-Seite zu sehen ist (style.css)
+  document.body.classList.toggle("live-mode", live);
+
   const problem = lastProblem;
   lastProblem = null; // nur einmal anzeigen
 
@@ -83,7 +109,7 @@ export async function renderMatch(container, matchId) {
     settings: getSettings(),
     playerById: new Map(players.map((p) => [p.id, p])),
     names: { own: team?.name ?? "?", opp: match.opponent },
-    rerender: () => renderMatch(container, matchId),
+    rerender: () => renderMatch(container, matchId, { live }),
     // Speichert ein Ereignis (über die Warteschlange) und zeichnet neu.
     addEvent(event) {
       const job = saveQueue.then(() => saveEvent(match, players, event));
@@ -96,11 +122,15 @@ export async function renderMatch(container, matchId) {
     },
   };
 
+  if (live) {
+    container.replaceChildren(liveScreen(ctx));
+    return;
+  }
+
   container.replaceChildren(...[
     el("a", { class: "back-link", href: `#/team/${match.teamId}` }, `← ${ctx.names.own}`),
     headerCard(ctx),
     backupReminder(ctx),
-    state.activeSet && liveCard(ctx),
     state.nextSetNumber && setStartCard(ctx),
     events.length > 0 && undoCard(ctx),
     ownRosterCard(ctx),
@@ -148,6 +178,9 @@ function headerCard(ctx) {
     el("p", { class: "muted" }, details),
     el("p", { class: "match-summary" }, el("strong", {}, matchResultText(state)), ` · ${status}`),
     match.note && el("p", { class: "muted small" }, match.note),
+    // Läuft ein Satz: großer Knopf zurück zur Live-Eingabe
+    state.activeSet && el("a", { class: "btn btn-primary btn-big btn-live", href: `#/match/${match.id}/live` },
+      `▶ ${t("match.continueLive")}`),
     el("div", { class: "row-actions" },
       el("a", { class: "btn", href: `#/match/${match.id}/edit` }, t("common.edit")),
       state.sets.length > 0 && el("a", { class: "btn", href: `#/match/${match.id}/report` }, t("match.report")),
@@ -253,6 +286,7 @@ function setStartCard(ctx) {
       };
       const problem = setStartError(state, event, players);
       if (problem) return showError(error, t(`error.${problem}`));
+      goLiveAfterStart = match.id; // nach dem Speichern direkt zur Live-Seite
       await ctx.addEvent(event);
     },
   }, tf("set.start", { n: number }));
