@@ -15,9 +15,10 @@
     rosterEntries  { id, teamId, season, personId, number, createdAt, updatedAt }
                    -> Saison-Kader: "Person X spielt in Saison Y für Team Z mit Nummer N"
   ab Version 2:
-    matches        { id, teamId, season, date, opponent, homeAway, competition, note,
-                     rules, ownSideTop, createdAt, updatedAt }
+    matches        { id, teamId, season, date, opponent, opponentTeamId, homeAway, competition,
+                     note, rules, ownSideTop, createdAt, updatedAt }
                    -> ein Spiel; rules = Regelwerte für genau dieses Spiel
+                      opponentTeamId = Gegner ist ein angelegtes Team (sonst null, nur Name)
     matchPlayers   { id, matchId, side, personId, number, name, isLibero, createdAt, updatedAt }
                    -> Spielkader beider Teams. side "own": personId aus dem Saison-Kader,
                       side "opp": Gegner mit Nummer und optionalem Namen
@@ -247,6 +248,7 @@ export async function listRoster(teamId, season) {
   Fügt eine Person zum Kader hinzu.
   - personId angegeben: bestehende Person
   - sonst: neue Person mit "name" wird angelegt
+  Gibt { personId } zurück.
 */
 export function addToRoster({ teamId, season, number, personId, name }) {
   return run(["rosterEntries", "persons"], "readwrite", (s) => {
@@ -259,6 +261,7 @@ export function addToRoster({ teamId, season, number, personId, name }) {
       id: newId(), teamId, season, personId: id, number,
       createdAt: now(), updatedAt: now(),
     });
+    return { personId: id };
   });
 }
 
@@ -372,6 +375,53 @@ export function removeMatchPlayer(id) {
   return run("matchPlayers", "readwrite", (s) => s.matchPlayers.delete(id));
 }
 
+/* ---------- Gegner aus der Teamliste ---------- */
+
+/*
+  Ist ein Spiel mit einem angelegten Team als Gegner verknüpft
+  (match.opponentTeamId), kommt der Gegnerkader aus dessen Saison-Kader.
+
+  Übernimmt alle Spieler aus dem Saison-Kader des Gegnerteams, deren Nummer
+  im Gegnerkader des Spiels noch fehlt. Gibt die Anzahl übernommener Spieler zurück.
+*/
+export async function copyOpponentRoster(match) {
+  if (!match.opponentTeamId) return 0;
+  const [roster, players] = await Promise.all([
+    listRoster(match.opponentTeamId, match.season),
+    listMatchPlayers(match.id),
+  ]);
+  const taken = new Set(players.filter((p) => p.side === "opp").map((p) => p.number));
+  let added = 0;
+  for (const entry of roster) {
+    if (taken.has(entry.number)) continue;
+    await addMatchPlayer({ matchId: match.id, side: "opp", personId: entry.personId, number: entry.number, name: entry.name });
+    added += 1;
+  }
+  return added;
+}
+
+/*
+  Trägt einen Gegnerspieler ins Spiel ein. Ist der Gegner ein angelegtes Team,
+  landet der Spieler auch in dessen Saison-Kader (Nutzerentscheidung):
+  - Nummer gibt es dort schon -> dieselbe Person (Name von dort, falls leer)
+  - sonst neue Person im Saison-Kader des Gegnerteams
+*/
+export async function addOpponentPlayer(match, { number, name, isLibero }) {
+  let personId = null;
+  let finalName = name;
+  if (match.opponentTeamId) {
+    const roster = await listRoster(match.opponentTeamId, match.season);
+    const entry = roster.find((e) => e.number === number);
+    if (entry) {
+      personId = entry.personId;
+      finalName = name || entry.name;
+    } else {
+      ({ personId } = await addToRoster({ teamId: match.opponentTeamId, season: match.season, number, name }));
+    }
+  }
+  return addMatchPlayer({ matchId: match.id, side: "opp", personId, number, name: finalName, isLibero });
+}
+
 /* ---------- Ereignisse eines Spiels ---------- */
 
 export async function listMatchEvents(matchId) {
@@ -392,6 +442,29 @@ export function addMatchEvent(matchId, data) {
       const maxSeq = request.result.reduce((max, e) => Math.max(max, e.seq), 0);
       s.matchEvents.add({ ...data, matchId, seq: maxSeq + 1, id: newId(), createdAt: now() });
     };
+  });
+}
+
+/* ---------- Sicherung und Import (Logik in backup.js) ---------- */
+
+const ALL_STORES = ["teams", "persons", "rosterEntries", "matches", "matchPlayers", "matchEvents"];
+
+// Liest ALLE Daten (für die Sicherung): { teams: [...], persons: [...], ... }
+export function exportAll() {
+  return run(ALL_STORES, "readonly", (s) =>
+    Object.fromEntries(ALL_STORES.map((name) => [name, s[name].getAll()])));
+}
+
+/*
+  Speichert die geplanten Einträge eines Imports (put aus backup.planImport)
+  in EINER Transaktion: Entweder kommt alles an oder gar nichts.
+  put() = einfügen oder ersetzen (gleiche id).
+*/
+export function importData(put) {
+  return run(ALL_STORES, "readwrite", (s) => {
+    for (const name of ALL_STORES) {
+      for (const item of put[name] ?? []) s[name].put(item);
+    }
   });
 }
 
