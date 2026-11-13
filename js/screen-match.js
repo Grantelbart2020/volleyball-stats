@@ -30,6 +30,9 @@ import { liveCard } from "./match-live.js";
 */
 let saveQueue = Promise.resolve();
 
+// Fehlercode der zuletzt abgelehnten Eingabe; wird beim nächsten Zeichnen einmal angezeigt.
+let lastProblem = null;
+
 /*
   Speichert ein Ereignis, wenn es zum FRISCH aus der Datenbank berechneten Stand
   passt. Hängt den Spielstand nach dem Ereignis an (für Verlauf und Auswertung).
@@ -69,10 +72,13 @@ export async function renderMatch(container, matchId) {
     db.listRoster(match.teamId, match.season),
   ]);
   const state = computeMatch(match.rules, players, events);
+  const problem = lastProblem;
+  lastProblem = null; // nur einmal anzeigen
 
   // ctx ("context") bündelt alles, was die einzelnen Karten brauchen.
   const ctx = {
     match, team, players, events, roster, state,
+    problem,
     settings: getSettings(),
     playerById: new Map(players.map((p) => [p.id, p])),
     names: { own: team?.name ?? "?", opp: match.opponent },
@@ -83,6 +89,7 @@ export async function renderMatch(container, matchId) {
       saveQueue = job.catch(() => {}); // ein Fehler soll die Schlange nicht blockieren
       return job.then((problem) => {
         if (problem) console.warn("Ereignis nicht gespeichert:", problem, event);
+        lastProblem = problem;
         return ctx.rerender();
       });
     },

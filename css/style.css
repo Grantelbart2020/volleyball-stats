@@ -37,6 +37,14 @@
   --q-negative: #f2994a; /* -  negativ          – orange     */
   --q-poor:     #e04646; /* /  sehr negativ     – rot        */
   --q-error:    #6b6f76; /* =  Fehler           – grau       */
+
+  /* Farbzonen für Annahme/Abwehr laut Bewertungsgrundlage (in beiden Designs gleich) */
+  --zone-green:  #b6d7a8;
+  --zone-yellow: #ffe599;
+  --zone-orange: #f6c99b;
+  --zone-pink:   #ea9999;
+  --zone-out:    #dd7e6b;  /* AUS – dunkelrot */
+  --zone-text:   #1c1e21;  /* Schrift auf den hellen Zonenfarben */
 }
 
 /* ---------- Grundlayout ---------- */
@@ -721,6 +729,84 @@ details summary {
 .chip-team {
   border-color: var(--accent);
   font-weight: 600;
+}
+
+/* ---------- Zonenauswahl (zone-picker.js) ---------- */
+
+.zone-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 110;           /* über dem Kreismenü */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.zone-dialog {
+  width: 100%;
+  max-width: 420px;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.zone-dialog h3 {
+  margin: 0;
+}
+
+.zone-grid {
+  display: grid;
+  gap: 2px;
+}
+
+.zone-cell {
+  min-height: 44px;       /* gut mit dem Finger zu treffen */
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* grobe Hauptzonen 1–9: große Felder */
+.zone-main {
+  min-height: 72px;
+  font-size: 1.4rem;
+}
+
+/* feines Raster: Hauptzonen abwechselnd hell/dunkel */
+.zone-cell.shade-a {
+  background: var(--surface);
+}
+
+.zone-cell.shade-b {
+  background: var(--bg);
+}
+
+/* Farbzonen */
+.band-green  { background: var(--zone-green);  color: var(--zone-text); }
+.band-yellow { background: var(--zone-yellow); color: var(--zone-text); }
+.band-orange { background: var(--zone-orange); color: var(--zone-text); }
+.band-pink   { background: var(--zone-pink);   color: var(--zone-text); }
+
+.zone-out {
+  width: 100%;
+}
+
+.zone-out.band-out {
+  background: var(--zone-out);
+  border-color: var(--zone-out);
+  color: var(--zone-text);
+}
+
+.zone-cell:active,
+.zone-out:active {
+  outline: 3px solid var(--accent);
 }
 
 /* Laufender Ballwechsel: Berührungen der Reihe nach */

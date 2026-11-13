@@ -125,7 +125,8 @@ export function createRadialMenu({ getActionLabel, onCenterTap, onSelect }) {
     const chosenPlayer = player;
     close();
     navigator.vibrate?.(15); // kurzes Vibrieren, falls das Gerät es kann ("?." = nur wenn vorhanden)
-    onSelect({ player: chosenPlayer, quality: QUALITIES[index] });
+    // index = Segment 0–5 (0 = bestes); welcher Code das ist, hängt von der Aktion ab (ratings.js codesFor)
+    onSelect({ player: chosenPlayer, quality: QUALITIES[index], index });
   }
 
   function updateCenterText() {

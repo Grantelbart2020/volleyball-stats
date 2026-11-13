@@ -15,6 +15,8 @@ import {
   validLiberoSwaps, suggestLiberoSwap, liberoSwapError, rallyError, substitutionError, eventError,
   touchOutcome, suggestPoint, suggestAction, touchError,
 } from "../js/rules.js";
+import { CELLS, coarseZone, passBand, zoneAsked, mainZone } from "../js/zones.js";
+import { codesFor, qualityDisplay } from "../js/ratings.js";
 
 const rules = defaultRules();
 
@@ -245,7 +247,7 @@ test("Berührungen sammeln sich im Ballwechsel, ein Punkt leert ihn", () => {
   const events = [setStart(1, OPP), touch(OPP, null, "serve", "+"), touch(OWN, "o5", "reception", "!")];
   const s = state(events).activeSet;
   assert.equal(s.rally.length, 2);
-  assert.deepEqual(s.rally[1], { team: OWN, playerId: "o5", action: "reception", quality: "!" });
+  assert.deepEqual(s.rally[1], { team: OWN, playerId: "o5", action: "reception", quality: "!", zone: null });
   assert.deepEqual(s.score, { own: 0, opp: 0 }); // Berührungen ändern den Spielstand nicht
   const after = state([...events, point(OWN)]).activeSet;
   assert.deepEqual(after.rally, []);
@@ -260,6 +262,11 @@ test("Punktvorschlag: Ass, Angriffs- und Blockpunkt, Fehler", () => {
   assert.equal(touchOutcome({ team: OPP, action: "attack", quality: "=" }), OWN);
   assert.equal(touchOutcome({ team: OWN, action: "reception", quality: "#" }), null); // perfekte Annahme: weiter
   assert.equal(touchOutcome({ team: OWN, action: "attack", quality: "+" }), null);
+  // laut Bewertungsgrundlage: Angriff "/" = geblockt, Block "/" = Übertritt/Netz -> Punkt Gegner
+  assert.equal(touchOutcome({ team: OWN, action: "attack", quality: "/" }), OPP);
+  assert.equal(touchOutcome({ team: OPP, action: "block", quality: "/" }), OWN);
+  assert.equal(touchOutcome({ team: OWN, action: "serve", quality: "/" }), null); // Aufschlag "/" = sehr positiv
+  assert.equal(touchOutcome({ team: OWN, action: "reception", quality: "/" }), null);
 
   const s = state([setStart(1, OWN), touch(OWN, "o1", "serve", "#")]).activeSet;
   assert.equal(suggestPoint(s).winner, OWN);
@@ -303,11 +310,75 @@ test("Berührung prüfen", () => {
 
   const served = state([setStart(1, OWN), touch(OWN, "o1", "serve", "+")]).activeSet;
   assert.equal(check(touch(OWN, "o1", "serve", "+"), served), "serveNotFirst");
-  // Nach einem Ass ist der Ballwechsel entschieden: erst den Punkt eintragen
+  // Nach einem Ass ist der Ballwechsel entschieden: nur noch die passende Annahme "=" des Gegners
   const ace = state([setStart(1, OWN), touch(OWN, "o1", "serve", "#")]).activeSet;
-  assert.equal(check(touch(OPP, null, "reception", "="), ace), "rallyDecided");
+  assert.equal(check(touch(OPP, null, "reception", "="), ace), null);
+  assert.equal(check(touch(OPP, null, "reception", "+"), ace), "mirrorMismatch");
+  assert.equal(check(touch(OWN, "o2", "dig", "+"), ace), "rallyDecided");
+  const aceMirrored = state([setStart(1, OWN), touch(OWN, "o1", "serve", "#"), touch(OPP, null, "reception", "=")]).activeSet;
+  assert.equal(check(touch(OWN, "o2", "dig", "="), aceMirrored), "rallyDecided"); // nur EINE Spiegel-Berührung
   // Über eventError (wie beim Speichern)
   assert.equal(eventError(state([setStart(1, OWN)]), touch(OWN, "o1", "serve", "+"), players, rules), null);
+});
+
+test("Angriff geblockt: Blockpunkt des Gegners als Spiegel-Berührung", () => {
+  const events = [setStart(1, OPP), touch(OPP, null, "serve", "+"), touch(OWN, "o5", "reception", "+"),
+    touch(OWN, "o3", "set", "+"), touch(OWN, "o4", "attack", "/")];
+  const s = state(events).activeSet;
+  assert.equal(suggestPoint(s).winner, OPP);
+  assert.equal(suggestAction(s, OPP, null), "dig"); // Gegner ohne Aufstellung: Abwehr vorgeschlagen, änderbar
+  assert.equal(touchError(s, touch(OPP, null, "block", "#"), oppTeamIds), null);
+  const after = state([...events, touch(OPP, null, "block", "#")]).activeSet;
+  assert.equal(suggestPoint(after).winner, OPP);
+});
+
+test("Zone wird bei der Berührung geprüft und mitgespeichert", () => {
+  const s = state([setStart(1, OWN)]).activeSet;
+  const check = (t) => touchError(s, t, ownTeamIds);
+  assert.equal(check({ ...touch(OWN, "o1", "serve", "+"), zone: "C4" }), null);
+  assert.equal(check({ ...touch(OWN, "o1", "serve", "+"), zone: "5" }), null);
+  assert.equal(check({ ...touch(OWN, "o1", "serve", "+"), zone: "out" }), null);
+  assert.equal(check({ ...touch(OWN, "o1", "serve", "+"), zone: "P#" }), "zoneInvalid"); // Farbzone nur für Annahme/Abwehr
+  assert.equal(check({ ...touch(OWN, "o1", "serve", "+"), zone: "Z9" }), "zoneInvalid");
+  assert.equal(check({ ...touch(OWN, "o2", "set", "+"), zone: "C4" }), "zoneNotAllowed");
+  const r = state([setStart(1, OWN), { ...touch(OWN, "o1", "serve", "+"), zone: "A1" }]).activeSet;
+  assert.equal(r.rally[0].zone, "A1");
+});
+
+/* ---------- Zonen und Anzeige der Bewertung ---------- */
+
+test("Zonenraster: 36 Felder, grobe Zone ergibt sich aus der feinen", () => {
+  assert.equal(CELLS.length, 36);
+  assert.equal(new Set(CELLS).size, 36);
+  assert.equal(mainZone("C4"), "4");
+  assert.equal(coarseZone("A1", "target"), "1");
+  assert.equal(coarseZone("out", "target"), "out");
+  // Farbzonen laut Bewertungsgrundlage
+  assert.equal(passBand("B3"), "#");
+  assert.equal(passBand("C2"), "#");
+  assert.equal(passBand("B4"), "+");
+  assert.equal(passBand("A4"), "!");
+  assert.equal(passBand("B8"), "!");
+  assert.equal(passBand("A1"), "-");
+  assert.equal(coarseZone("B3", "pass"), "P#");
+});
+
+test("Zone wird nur gefragt, wenn der Ball ein Ziel hat", () => {
+  assert.equal(zoneAsked("serve", "+"), true);
+  assert.equal(zoneAsked("serve", "="), true);    // z. B. AUS
+  assert.equal(zoneAsked("attack", "/"), false);  // geblockt
+  assert.equal(zoneAsked("reception", "+"), true);
+  assert.equal(zoneAsked("reception", "="), false);
+  assert.equal(zoneAsked("dig", "/"), false);     // direkt zum Gegner
+  assert.equal(zoneAsked("set", "+"), false);
+});
+
+test("Aufschlag '/' ist sehr positiv und wird als zweitbestes angezeigt", () => {
+  assert.deepEqual(codesFor("serve"), ["#", "/", "+", "!", "-", "="]);
+  assert.deepEqual(codesFor("attack"), ["#", "+", "!", "-", "/", "="]);
+  assert.equal(qualityDisplay("/", "serve").color, "var(--q-positive)");
+  assert.equal(qualityDisplay("/", "serve").id, "poor"); // Name über "quality.serve.poor"
+  assert.equal(qualityDisplay("/", "attack").color, "var(--q-poor)");
 });
 
 test("Wechsel und Libero-Tausch nur zwischen den Ballwechseln", () => {
