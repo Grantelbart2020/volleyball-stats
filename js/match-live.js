@@ -215,13 +215,36 @@ let panel = null;
 const dismissed = new Set();
 
 /*
+  Hoch- oder Querformat? matchMedia fragt den Browser (wie eine CSS-Media-Query).
+  Dreht man das Handy, wird die Live-Seite neu gezeichnet (rerenderLive merkt
+  sich dafür die Funktion der zuletzt gezeichneten Live-Seite).
+*/
+const landscapeQuery = window.matchMedia("(orientation: landscape)");
+let rerenderLive = null;
+
+function onOrientationChange() {
+  if (rerenderLive && document.body.classList.contains("live-mode")) rerenderLive();
+}
+// addListener = Ersatz für ältere Safari-Versionen
+if (landscapeQuery.addEventListener) landscapeQuery.addEventListener("change", onOrientationChange);
+else landscapeQuery.addListener?.(onOrientationChange);
+
+/*
   Die Live-Seite (#/match/<id>/live): füllt genau den Bildschirm und scrollt
-  nicht (style.css, body.live-mode). Aufbau von oben nach unten:
+  nicht (style.css, body.live-mode).
+
+  Hochformat, von oben nach unten:
     1. Kopf:   ☰ Spiel (zur Spielseite) | Spielstand | ↶ Rückgängig
-    2. Spielfeld: passt sich der Bildschirmhöhe an
+    2. Spielfeld: obere Hälfte, Netz (mit Knopf "Seiten tauschen"), untere Hälfte.
+       Jede Hälfte hat eine Leiste mit Teamname und Symbol-Knöpfen
+       (⏸ Auszeit, 🔄 Wechsel, L Libero).
     3. Info:   Zonen-/Grundabfrage, Vorschläge, laufender Ballwechsel, Fehler,
                Wechsel-/Libero-Auswahl (nur DIESER Bereich scrollt, wenn nötig)
-    4. Fuß:    Punkt-Knöpfe und Werkzeuge (Auszeit, Wechsel, Libero, Seiten)
+    4. Fuß:    Punkt-Knöpfe
+  Querformat (Klasse "landscape", Aufteilung in style.css):
+    links das Spielfeld (Netz senkrecht, Teams links/rechts, Symbol-Knöpfe
+    unten links bzw. unten rechts unter dem jeweiligen Team), darunter die
+    Punkt-Knöpfe; rechts eine schmale Spalte mit Kopf und Info.
   Alles andere (Kader, Verlauf, Bearbeiten, Export, Löschen) steht auf der
   Spielseite.
 */
@@ -231,12 +254,18 @@ export function liveScreen(ctx) {
   if (panel && panel.matchId !== match.id) panel = null;
   if (pendingZone && pendingZone.matchId !== match.id) pendingZone = null;
   if (pendingPoint && (pendingPoint.matchId !== match.id || rallyError(set))) pendingPoint = null;
+  rerenderLive = ctx.rerender;
 
-  const topTeam = match.ownSideTop ? OWN : OPP;
+  const landscape = landscapeQuery.matches;
+  // "ownSideTop" heißt im Querformat: eigenes Team links (Handy nach links gedreht)
+  const firstTeam = match.ownSideTop ? OWN : OPP;
+  const secondTeam = otherTeam(firstTeam);
+  const [firstSide, secondSide] = landscape ? ["left", "right"] : ["top", "bottom"];
   const blocker = rallyError(set);
 
-  // "Punkt …" öffnet die Abfrage des Grundes (pointBar im Info-Bereich), gespeichert wird danach
-  const pointButtons = !pendingPoint && el("div", { class: "point-buttons" }, TEAMS.map((team) =>
+  // "Punkt …" öffnet die Abfrage des Grundes (pointBar im Info-Bereich), gespeichert wird danach.
+  // Reihenfolge wie auf dem Feld: erst das obere bzw. linke Team.
+  const pointButtons = !pendingPoint && el("div", { class: "point-buttons" }, [firstTeam, secondTeam].map((team) =>
     el("button", {
       type: "button", class: "btn btn-primary btn-big", disabled: Boolean(blocker || pendingZone),
       onClick: () => { pendingPoint = { matchId: match.id, winner: team, reason: null }; ctx.rerender(); },
@@ -256,29 +285,37 @@ export function liveScreen(ctx) {
     }, "↶"),
   );
 
-  return el("div", { class: "live-screen" },
+  // Seiten tauschen: Knopf mitten auf dem Netz (dreht nur die Anzeige)
+  const swapSides = el("button", {
+    type: "button", class: "btn btn-icon net-swap",
+    title: t("live.swapSides"), "aria-label": t("live.swapSides"),
+    onClick: async () => {
+      await db.saveMatch({ id: ctx.match.id, ownSideTop: !ctx.match.ownSideTop });
+      ctx.rerender();
+    },
+  }, landscape ? "⇆" : "⇅");
+
+  return el("div", { class: `live-screen${landscape ? " landscape" : ""}` },
     head,
     el("div", { class: "live-court" },
-      courtHalf(ctx, set, topTeam, true),
-      el("div", { class: "net" }),
-      courtHalf(ctx, set, otherTeam(topTeam), false),
+      courtHalf(ctx, set, firstTeam, firstSide),
+      el("div", { class: "live-net" }, swapSides),
+      courtHalf(ctx, set, secondTeam, secondSide),
     ),
     el("div", { class: "live-info" },
       pendingZone && zoneBar(ctx),
       pendingPoint && pointBar(ctx, set),
+      // Selbst geöffnete Auswahl (Wechsel/Libero) zuerst, damit sie ohne Scrollen zu sehen ist
+      panel?.type === "sub" && subPanel(ctx, set, panel.team),
+      panel?.type === "libero" && liberoPanel(ctx, set, panel.team),
       !pendingZone && !pendingPoint && TEAMS.map((team) => suggestionBox(ctx, set, team)),
       blocker === "liberoMustExit" && el("p", { class: "form-warning" }, t("live.liberoBlocks")),
       // Wurde die letzte Eingabe abgelehnt (z. B. unpassende Spiegel-Berührung)? Einmal anzeigen.
       ctx.problem && el("p", { class: "form-error" }, t(`error.${ctx.problem}`)),
       pointSuggestion(ctx, set),
-      panel?.type === "sub" && subPanel(ctx, set, panel.team),
-      panel?.type === "libero" && liberoPanel(ctx, set, panel.team),
       rallyView(ctx, set),
     ),
-    el("div", { class: "live-foot" },
-      pointButtons,
-      actionButtons(ctx, set),
-    ),
+    el("div", { class: "live-foot" }, pointButtons),
   );
 }
 
@@ -301,13 +338,29 @@ function scoreboard(ctx, set) {
 /* ---------- Spielfeld ---------- */
 
 /*
-  Eine Feldhälfte. Beide Teams schauen zum Netz:
-    oben (Netz unten):  1 6 5 / 2 3 4
-    unten (Netz oben):  4 3 2 / 5 6 1
+  Eine Feldhälfte. Beide Teams schauen zum Netz. "side" = Lage auf dem Bildschirm.
+  LAYOUTS: in welcher Reihenfolge die Positionen (Index 0 = Position 1) im
+  Raster stehen, und wie viele Spalten es hat:
+    top    (Netz unten):  1 6 5 / 2 3 4
+    bottom (Netz oben):   4 3 2 / 5 6 1
+    left   (Netz rechts): 5 4 / 6 3 / 1 2
+    right  (Netz links):  2 1 / 3 6 / 4 5
 */
-function courtHalf(ctx, set, team, top) {
+const LAYOUTS = {
+  top: { order: [0, 5, 4, 1, 2, 3], columns: 3 },
+  bottom: { order: [3, 2, 1, 4, 5, 0], columns: 3 },
+  left: { order: [4, 3, 5, 2, 0, 1], columns: 2 },
+  right: { order: [1, 0, 2, 5, 3, 4], columns: 2 },
+};
+
+function courtHalf(ctx, set, team, side) {
   const ts = set.teams[team];
-  const label = el("div", { class: "court-label" }, ctx.names[team]);
+  // Leiste der Hälfte: Teamname + Symbol-Knöpfe (oben bei der oberen Hälfte, sonst unten)
+  const bar = el("div", { class: "court-bar" },
+    el("div", { class: "court-label" }, ctx.names[team]),
+    teamTools(ctx, set, team),
+  );
+  const barFirst = side === "top";
   // Wird gerade der Verursacher eines Punktes gewählt? Dann wählt Antippen die Person.
   const cause = causeChoice(ctx, set);
   const causeMode = cause?.team === team;
@@ -333,7 +386,7 @@ function courtHalf(ctx, set, team, top) {
       zoneField({
         kind: pendingZone.kind,
         mode: ctx.settings.zoneMode,
-        rotated: top,
+        side,
         onPick: (zone) => finishZone(ctx, zone),
       }),
     );
@@ -342,8 +395,8 @@ function courtHalf(ctx, set, team, top) {
   if (!ts.lineup) {
     // Ohne Aufstellung: "Mannschaft" antippen, bei einzelnen Gegnerspielern auch den Spieler
     const players = ctx.settings.opponentMode === "players" ? ctx.players.filter((p) => p.side === team) : [];
-    return el("div", { class: "court-half" },
-      label,
+    return el("div", { class: `court-half side-${side}` },
+      barFirst && bar,
       el("p", { class: "muted small" }, t("live.noLineup")),
       withZone(el("div", { class: "chip-list touch-list" },
         el("button", {
@@ -355,11 +408,12 @@ function courtHalf(ctx, set, team, top) {
           onPointerdown: tapHandler(p.id),
         }, playerLabel(p))),
       )),
+      !barFirst && bar,
     );
   }
 
-  const order = top ? [0, 5, 4, 1, 2, 3] : [3, 2, 1, 4, 5, 0];
-  const spots = order.map((index) => {
+  const layout = LAYOUTS[side];
+  const spots = layout.order.map((index) => {
     const player = ctx.playerById.get(ts.lineup[index]);
     const isServer = index === 0 && set.serving === team;
     const classes = ["court-spot", player?.isLibero && "libero", isServer && "server", causeMode && "cause-pick"]
@@ -372,10 +426,12 @@ function courtHalf(ctx, set, team, top) {
     );
   });
 
-  return el("div", { class: "court-half" },
-    top && label,
-    withZone(el("div", { class: "lineup-court" }, spots)),
-    !top && label,
+  return el("div", { class: `court-half side-${side}` },
+    barFirst && bar,
+    withZone(el("div", {
+      class: "lineup-court", style: `grid-template-columns: repeat(${layout.columns}, minmax(0, 1fr))`,
+    }, spots)),
+    !barFirst && bar,
   );
 }
 
@@ -444,46 +500,58 @@ function suggestionBox(ctx, set, team) {
   );
 }
 
-/* ---------- Knöpfe: Wechsel, Libero, Seiten tauschen ---------- */
+/* ---------- Symbol-Knöpfe eines Teams: Auszeit, Wechsel, Libero ---------- */
 
-function actionButtons(ctx, set) {
-  const open = (type, team) => () => {
+/*
+  Kleiner Knopf mit Symbol und (optional) Zähler, z. B. "⏸ 1/2".
+  Der ausführliche Text (mit Teamname) steht als Hinweis (title) und für
+  Bildschirmleser (aria-label) dabei.
+*/
+function iconButton({ icon, count, label, disabled, active, onClick }) {
+  return el("button", {
+    type: "button", class: `btn btn-icon${active ? " active" : ""}`,
+    title: label, "aria-label": label, disabled: Boolean(disabled), onClick,
+  },
+    el("span", { class: "icon" }, icon),
+    count && el("span", { class: "icon-count" }, count),
+  );
+}
+
+function teamTools(ctx, set, team) {
+  const ts = set.teams[team];
+  const rules = ctx.match.rules;
+  const open = (type) => () => {
     const same = panel?.type === type && panel.team === team;
     panel = same ? null : { matchId: ctx.match.id, type, team, outId: null, exceptional: false };
     ctx.rerender();
   };
+  const isOpen = (type) => panel?.type === type && panel.team === team;
 
-  const buttons = [];
-  // Auszeit: für beide Teams, auch ohne Aufstellung; nur zwischen den Ballwechseln
-  for (const team of TEAMS) {
-    buttons.push(el("button", {
-      type: "button", class: "btn", disabled: Boolean(timeoutError(set, team, ctx.match.rules) || pendingPoint),
-      onClick: () => ctx.addEvent({ type: "timeout", team }),
-    }, tf("live.timeoutButton", {
-      team: ctx.names[team], count: set.teams[team].timeouts, max: maxTimeouts(ctx.match.rules),
-    })));
-  }
-  for (const team of TEAMS) {
-    const ts = set.teams[team];
-    if (!ts.lineup) continue; // ohne Aufstellung keine Wechsel
+  // Auszeit: auch ohne Aufstellung; nur zwischen den Ballwechseln (prüft timeoutError)
+  const timeoutValues = { team: ctx.names[team], count: ts.timeouts, max: maxTimeouts(rules) };
+  const buttons = [iconButton({
+    icon: "⏸", count: `${ts.timeouts}/${timeoutValues.max}`,
+    label: tf("live.timeoutButton", timeoutValues),
+    disabled: timeoutError(set, team, rules) || pendingPoint,
+    onClick: () => ctx.addEvent({ type: "timeout", team }),
+  })];
+
+  if (ts.lineup) { // ohne Aufstellung keine Wechsel
     // Wechsel nur zwischen den Ballwechseln
-    buttons.push(el("button", { type: "button", class: "btn", disabled: set.rally.length > 0 || Boolean(pendingPoint), onClick: open("sub", team) },
-      tf("live.subButton", { team: ctx.names[team], count: ts.subCount, max: ctx.match.rules.maxSubstitutions })));
+    buttons.push(iconButton({
+      icon: "🔄", count: `${ts.subCount}/${rules.maxSubstitutions}`,
+      label: tf("live.subButton", { team: ctx.names[team], count: ts.subCount, max: rules.maxSubstitutions }),
+      disabled: set.rally.length > 0 || pendingPoint, active: isOpen("sub"),
+      onClick: open("sub"),
+    }));
     if (validLiberoSwaps(set, team).length) {
-      buttons.push(el("button", { type: "button", class: "btn", onClick: open("libero", team) },
-        tf("live.liberoButton", { team: ctx.names[team] })));
+      buttons.push(iconButton({
+        icon: "L", label: tf("live.liberoButton", { team: ctx.names[team] }),
+        active: isOpen("libero"), onClick: open("libero"),
+      }));
     }
   }
-  buttons.push(el("button", {
-    type: "button", class: "btn",
-    onClick: async () => {
-      await db.saveMatch({ id: ctx.match.id, ownSideTop: !ctx.match.ownSideTop });
-      ctx.rerender();
-    },
-  }, `⇅ ${t("live.swapSides")}`));
-
-  // Eine Zeile, bei Bedarf seitlich wischbar (die Seite selbst scrollt nicht)
-  return el("div", { class: "live-tools" }, buttons);
+  return el("div", { class: "team-tools" }, buttons);
 }
 
 /* ---------- Auswechslung ---------- */

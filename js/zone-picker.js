@@ -4,11 +4,12 @@
   demselben Bild: Spieler antippen, Bewertung wählen, Zone auf dem Feld antippen.
 
   Benutzung (siehe match-live.js):
-    zoneField({ kind, mode, rotated, onPick })  -> Element, das über die Feldhälfte gelegt wird
+    zoneField({ kind, mode, side, onPick })  -> Element, das über die Feldhälfte gelegt wird
       kind     "target" (Ziel beim Gegner) oder "pass" (Ankunft auf der eigenen Seite)
       mode     "coarse" oder "fine" (Einstellung)
-      rotated  true, wenn diese Feldhälfte auf dem Bildschirm OBEN liegt
-               (dann ist das Netz unten und alles um 180° gedreht)
+      side     wo diese Feldhälfte auf dem Bildschirm liegt:
+               "bottom" (Netz oben, Grundstellung), "top" (Netz unten, 180° gedreht),
+               "left" (Querformat, Netz rechts), "right" (Querformat, Netz links)
       onPick(zone)  zone = gespeicherter Wert (siehe zones.js), "out" = AUS
 
   Der Rand um das Raster (Seiten und Grundlinie, nicht das Netz) ist AUS:
@@ -44,10 +45,23 @@ function buildRows(kind, mode) {
   }));
 }
 
-export function zoneField({ kind, mode, rotated, onPick }) {
-  let rows = buildRows(kind, mode);
-  // Liegt die Hälfte oben, sieht man sie "von der anderen Seite": Reihen und Spalten umdrehen
-  if (rotated) rows = rows.map((row) => [...row].reverse()).reverse();
+/*
+  Dreht das Raster (Liste von Reihen, Netz oben) passend zur Lage der Hälfte.
+  Wie eine verschachtelte Python-Liste: new[i][j] = old[...][...].
+*/
+function turnRows(rows, side) {
+  const n = rows.length;
+  const range = [...Array(n).keys()]; // [0, 1, …, n-1] wie range(n) in Python
+  if (side === "top") return rows.map((row) => [...row].reverse()).reverse(); // 180°
+  // links: im Uhrzeigersinn gedreht, die Netz-Reihe wird zur rechten Spalte
+  if (side === "left") return range.map((i) => range.map((j) => rows[n - 1 - j][i]));
+  // rechts: gegen den Uhrzeigersinn, die Netz-Reihe wird zur linken Spalte
+  if (side === "right") return range.map((i) => range.map((j) => rows[j][n - 1 - i]));
+  return rows;
+}
+
+export function zoneField({ kind, mode, side = "bottom", onPick }) {
+  const rows = turnRows(buildRows(kind, mode), side);
 
   const size = rows.length;
   const grid = el("div", {
@@ -61,7 +75,7 @@ export function zoneField({ kind, mode, rotated, onPick }) {
 
   // Rahmen = AUS. Tipp auf den Rahmen selbst (nicht auf ein Feld) -> AUS
   const frame = el("div", {
-    class: `zone-frame${rotated ? " rotated" : ""}${kind === "pass" ? " pass" : ""}`,
+    class: `zone-frame side-${side}${kind === "pass" ? " pass" : ""}`,
     onPointerdown: (event) => {
       if (event.target === frame || event.target.classList.contains("zone-out-label")) {
         event.preventDefault();

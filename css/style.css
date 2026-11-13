@@ -772,8 +772,17 @@ details summary {
   cursor: pointer;
 }
 
-.zone-frame.rotated {
+.zone-frame.side-top {
   padding: 26px 18px 0;   /* Hälfte oben: Netz unten, Grundlinie oben */
+}
+
+/* Querformat: Netz rechts bzw. links, Grundlinie außen, Seitenlinien oben/unten */
+.zone-frame.side-left {
+  padding: 14px 0 22px 26px;
+}
+
+.zone-frame.side-right {
+  padding: 14px 26px 22px 0;
 }
 
 .zone-frame.pass {
@@ -795,9 +804,14 @@ details summary {
   color: var(--zone-text);
 }
 
-.zone-frame.rotated .zone-out-label {
+.zone-frame.side-top .zone-out-label {
   top: 4px;
   bottom: auto;
+}
+
+.zone-frame.side-left .zone-out-label,
+.zone-frame.side-right .zone-out-label {
+  bottom: 2px;
 }
 
 .zone-grid {
@@ -1249,9 +1263,57 @@ body.live-mode main {
   flex-direction: column;
 }
 
+/* Leiste jeder Hälfte: Teamname links, Symbol-Knöpfe rechts */
+.court-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 2px 0;
+}
+
 .live-court .court-label {
   margin: 0;
   font-size: 0.8rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-tools {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+/* Kleiner Symbol-Knopf (Auszeit, Wechsel, Libero, Seiten tauschen) */
+.btn-icon {
+  min-height: 34px;
+  min-width: 34px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.btn-icon .icon {
+  font-weight: 700;
+}
+
+.btn-icon .icon-count {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* geöffnete Auswahl (Wechsel/Libero) hervorheben */
+.btn-icon.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .live-court .lineup-court {
@@ -1275,9 +1337,32 @@ body.live-mode main {
   overflow-y: auto;
 }
 
-.live-court .net {
+/* Netz: Linie mit dem Knopf "Seiten tauschen" in der Mitte */
+.live-net {
   flex: 0 0 auto;
-  margin: 4px 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2px 0;
+}
+
+.live-net::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 6px;
+  transform: translateY(-50%);
+  border-radius: 3px;
+  background: var(--text-muted);
+}
+
+.live-net .net-swap {
+  position: relative; /* liegt über der Linie */
+  min-height: 30px;
+  background: var(--surface);
 }
 
 /* 3. Info: Abfragen, Vorschläge, laufender Ballwechsel – scrollt in sich */
@@ -1326,21 +1411,6 @@ body.live-mode main {
   min-height: 48px;
 }
 
-/* Werkzeuge in einer Zeile, bei Bedarf seitlich wischbar */
-.live-tools {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-}
-
-.live-tools .btn {
-  flex: 0 0 auto;
-  min-height: 40px;
-  padding: 0 10px;
-  font-size: 0.85rem;
-  white-space: nowrap;
-}
-
 /* Spielseite: großer Knopf zurück zur Live-Eingabe */
 .btn-live {
   display: flex;
@@ -1358,4 +1428,73 @@ body.live-mode main {
 /* Hinweis "Ohne Aufstellung erfasst" kostet live nur Platz */
 .live-court .court-half > p.muted {
   display: none;
+}
+
+/* ---------- Querformat (Klasse "landscape", gesetzt in match-live.js) ----------
+  Raster mit 2 Spalten:
+    links:  Spielfeld (Netz senkrecht), darunter die Punkt-Knöpfe
+    rechts: Kopf (Menü, Stand, Rückgängig) und Info-Bereich (scrollt in sich)
+*/
+.live-screen.landscape {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 32%);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "court head"
+    "court info"
+    "foot  info";
+  gap: 6px 10px;
+}
+
+.landscape .live-head  { grid-area: head; }
+.landscape .live-court { grid-area: court; flex-direction: row; }
+.landscape .live-info  { grid-area: info; max-height: none; }
+.landscape .live-foot  { grid-area: foot; }
+
+/* Die Info-Spalte bleibt sichtbar, auch wenn sie leer ist (sonst springt das Raster) */
+.landscape .live-info:empty {
+  display: flex;
+}
+
+/* Kopf in der schmalen Spalte: Stand etwas kleiner */
+.landscape .live-head {
+  gap: 4px;
+}
+
+.landscape .live-head .score-points {
+  font-size: 1.5rem;
+}
+
+/* Feldhälften nebeneinander; die Leiste (Name + Knöpfe) immer unten */
+.landscape .live-court .court-half {
+  min-width: 0;
+}
+
+/* links: Knöpfe ganz links außen, rechts: ganz rechts außen */
+.landscape .court-half.side-left .court-bar {
+  flex-direction: row-reverse;
+}
+
+/* Netz senkrecht */
+.landscape .live-net {
+  margin: 0 4px;
+}
+
+.landscape .live-net::before {
+  left: 50%;
+  right: auto;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  height: auto;
+  transform: translateX(-50%);
+}
+
+.landscape .live-net .net-swap {
+  padding: 0 4px;
+  min-width: 30px;
+}
+
+.landscape .live-foot .btn-big {
+  min-height: 42px;
 }
