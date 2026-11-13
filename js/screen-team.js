@@ -3,7 +3,7 @@
   Adresse: #/team/<id>
 */
 import { el, confirmButton, showError } from "./dom.js";
-import { t } from "./i18n.js";
+import { t, tf } from "./i18n.js";
 import * as db from "./db.js";
 import { computeMatch, seasonForDate } from "./rules.js";
 import { formatDate, matchResultText } from "./match-format.js";
@@ -13,6 +13,9 @@ const selectedSeasonByTeam = new Map();
 
 // Welcher Kader-Eintrag gerade bearbeitet wird (null = keiner).
 let editingEntryId = null;
+
+// Bei welchem Kader-Eintrag gerade "Team wechseln" offen ist (null = keiner).
+let transferEntryId = null;
 
 // Aktuelle Saison, z. B. "2026/27" (Beginn im Juli, siehe rules.js).
 function currentSeason() {
@@ -49,7 +52,9 @@ export async function renderTeam(container, teamId) {
 
   const roster = await db.listRoster(teamId, season);
   // Nur Personen dieses Teams (z. B. aus früheren Saisons), keine aus anderen Teams
-  const persons = await db.listTeamPersons(teamId);
+  const persons = await db.listTeamPersons(teamId, season);
+  // Mögliche Ziele für einen Teamwechsel
+  const otherTeams = (await db.listTeams()).filter((other) => other.id !== teamId);
   const matches = await db.listMatches(teamId, season);
   // Für das Ergebnis (z. B. 3:1) braucht jedes Spiel seine Ereignisse.
   const results = await Promise.all(matches.map(async (match) =>
@@ -60,7 +65,7 @@ export async function renderTeam(container, teamId) {
     teamHeaderCard(team, rerender),
     seasonCard(teamId, season, allSeasons, roster, rerender),
     matchesCard(teamId, season, matches, results),
-    rosterCard(teamId, season, roster, persons, rerender),
+    rosterCard(teamId, season, roster, persons, otherTeams, rerender),
   );
 }
 
@@ -126,7 +131,7 @@ function teamHeaderCard(team, rerender) {
 
 function seasonCard(teamId, season, allSeasons, roster, rerender) {
   const select = el("select", {
-    onChange: () => { selectedSeasonByTeam.set(teamId, select.value); editingEntryId = null; rerender(); },
+    onChange: () => { selectedSeasonByTeam.set(teamId, select.value); editingEntryId = null; transferEntryId = null; rerender(); },
   }, allSeasons.map((s) => el("option", { value: s, selected: s === season }, s)));
 
   const seasonInput = el("input", { type: "text", placeholder: "2027/28", maxLength: 7, inputMode: "numeric" });
@@ -164,12 +169,13 @@ function seasonCard(teamId, season, allSeasons, roster, rerender) {
 
 /* ---------- Karte 3: Kader dieser Saison ---------- */
 
-function rosterCard(teamId, season, roster, persons, rerender) {
+function rosterCard(teamId, season, roster, persons, otherTeams, rerender) {
   const rows = roster.length
-    ? el("ul", { class: "roster" }, roster.map((entry) =>
-        entry.id === editingEntryId
-          ? rosterEditRow(entry, roster, rerender)
-          : rosterRow(entry, rerender)))
+    ? el("ul", { class: "roster" }, roster.map((entry) => {
+        if (entry.id === editingEntryId) return rosterEditRow(entry, roster, rerender);
+        if (entry.id === transferEntryId) return rosterTransferRow(entry, otherTeams, rerender);
+        return rosterRow(entry, otherTeams.length > 0, rerender);
+      }))
     : el("p", { class: "muted" }, t("roster.empty"));
 
   return el("section", { class: "card" },
@@ -180,16 +186,20 @@ function rosterCard(teamId, season, roster, persons, rerender) {
   );
 }
 
-// Eine Zeile im Kader: Nummer, Name, Bearbeiten, Entfernen
-function rosterRow(entry, rerender) {
+// Eine Zeile im Kader: Nummer, Name, Bearbeiten, Team wechseln, Entfernen
+function rosterRow(entry, canTransfer, rerender) {
   return el("li", { class: "roster-row" },
     el("span", { class: "roster-number" }, entry.number),
     el("span", { class: "roster-name" }, entry.name),
     el("span", { class: "row-actions" },
       el("button", {
         type: "button", class: "btn",
-        onClick: () => { editingEntryId = entry.id; rerender(); },
+        onClick: () => { editingEntryId = entry.id; transferEntryId = null; rerender(); },
       }, t("common.edit")),
+      canTransfer && el("button", {
+        type: "button", class: "btn",
+        onClick: () => { transferEntryId = entry.id; editingEntryId = null; rerender(); },
+      }, t("roster.transfer")),
       confirmButton(t("roster.remove"), t("common.reallyRemove"), async () => {
         await db.removeFromRoster(entry.id);
         rerender();
@@ -227,6 +237,44 @@ function rosterEditRow(entry, roster, rerender) {
   );
 
   return el("li", { class: "roster-row editing" }, form, error);
+}
+
+/*
+  Teamwechsel: Zielteam und Nummer wählen. Die Person verlässt diesen Kader
+  (diese Saison) und steht danach im Kader des Zielteams (db.transferRosterEntry).
+*/
+function rosterTransferRow(entry, otherTeams, rerender) {
+  const teamSelect = el("select", {}, otherTeams.map((other) => el("option", { value: other.id }, other.name)));
+  const numberInput = el("input", {
+    type: "text", inputMode: "numeric", maxLength: 2, value: entry.number, class: "input-number",
+  });
+  const error = el("p", { class: "form-error", hidden: true });
+
+  const form = el("form", {
+    class: "form-row",
+    onSubmit: async (event) => {
+      event.preventDefault();
+      const number = parseNumber(numberInput.value);
+      if (number === null) return showError(error, t("error.numberFormat"));
+      const target = await db.listRoster(teamSelect.value, entry.season);
+      if (target.some((e) => e.personId === entry.personId)) return showError(error, t("error.alreadyInTeam"));
+      if (target.some((e) => e.number === number)) return showError(error, t("error.numberTaken"));
+      await db.transferRosterEntry(entry, teamSelect.value, number);
+      transferEntryId = null;
+      rerender();
+    },
+  },
+    teamSelect,
+    numberInput,
+    el("button", { type: "submit", class: "btn btn-primary" }, t("roster.transferButton")),
+    el("button", { type: "button", class: "btn", onClick: () => { transferEntryId = null; rerender(); } }, t("common.cancel")),
+  );
+
+  return el("li", { class: "roster-row editing" },
+    el("p", { class: "small" }, tf("roster.transferTitle", { name: entry.name, season: entry.season })),
+    form,
+    error,
+  );
 }
 
 /*

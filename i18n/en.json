@@ -306,5 +306,9 @@
   "backup.reminder": "Match finished. Save a backup now? Browser data can get lost (e.g. when clearing browser data or changing devices).",
   "error.importNotJson": "This file is not a valid backup (not JSON).",
   "error.importWrongFormat": "This file is not a backup of this app or it is damaged.",
-  "error.importNewerVersion": "This backup comes from a newer app version. Please update the app."
+  "error.importNewerVersion": "This backup comes from a newer app version. Please update the app.",
+  "roster.transfer": "Change team",
+  "roster.transferTitle": "{name} moves in season {season} to:",
+  "roster.transferButton": "Move",
+  "error.alreadyInTeam": "This person is already in the target team's roster for this season."
 }
