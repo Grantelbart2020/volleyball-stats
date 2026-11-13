@@ -789,6 +789,13 @@ details summary {
   background: var(--zone-out);
 }
 
+/* Aufschlag/Angriff: kein AUS-Rand, das Raster füllt die ganze Hälfte */
+.zone-frame.no-out {
+  padding: 0;
+  background: transparent;
+  cursor: default;
+}
+
 .zone-out-label {
   position: absolute;
   left: 0;
@@ -1232,6 +1239,21 @@ body.live-mode main {
 .live-head .score-name {
   font-size: 0.8rem;
 }
+
+/* Ball-Symbol außen neben der Zahl, ohne die Zahl zu verschieben */
+.live-head .score-points {
+  position: relative;
+}
+
+.live-head .score-serve {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.9rem;
+}
+
+.live-head .score-serve.before { right: 100%; margin-right: 4px; }
+.live-head .score-serve.after  { left: 100%; margin-left: 4px; }
 
 .live-head .scoreboard + p {
   margin: 0;

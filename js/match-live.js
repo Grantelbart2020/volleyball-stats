@@ -322,10 +322,17 @@ export function liveScreen(ctx) {
 /* ---------- Spielstand ---------- */
 
 function scoreboard(ctx, set) {
+  // Aufschlag: nur das Ball-Symbol, außen neben der Zahl (liegt "über" dem Platz,
+  // verschiebt die Zahl also nicht – beide Zahlen bleiben auf gleicher Höhe)
   const teamScore = (team) => el("div", { class: `score-team${set.serving === team ? " serving" : ""}` },
     el("span", { class: "score-name" }, ctx.names[team]),
-    el("span", { class: "score-points" }, set.score[team]),
-    set.serving === team && el("span", { class: "score-serve" }, `🏐 ${t("live.serving")}`),
+    el("span", { class: "score-points" },
+      set.score[team],
+      set.serving === team && el("span", {
+        class: `score-serve ${team === OWN ? "before" : "after"}`,
+        title: t("live.serving"), "aria-label": t("live.serving"),
+      }, "🏐"),
+    ),
   );
   return el("div", {},
     el("div", { class: "scoreboard" }, teamScore(OWN), el("span", { class: "score-sep" }, ":"), teamScore(OPP)),

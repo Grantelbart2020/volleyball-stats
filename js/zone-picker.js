@@ -73,7 +73,15 @@ export function zoneField({ kind, mode, side = "bottom", onPick }) {
     onPointerdown: (event) => { event.preventDefault(); event.stopPropagation(); onPick(f.value); },
   }, f.label)));
 
-  // Rahmen = AUS. Tipp auf den Rahmen selbst (nicht auf ein Feld) -> AUS
+  /*
+    Aufschlag/Angriff (target): kein AUS-Rand. Ein Ball ins Aus ist ein Fehler
+    ("="), dafür wird gar keine Zone gefragt (Nutzerwunsch 13.11.2026).
+  */
+  if (kind === "target") {
+    return el("div", { class: `zone-frame no-out side-${side}` }, grid);
+  }
+
+  // Annahme/Abwehr: Rahmen = AUS. Tipp auf den Rahmen selbst (nicht auf ein Feld) -> AUS
   const frame = el("div", {
     class: `zone-frame side-${side}${kind === "pass" ? " pass" : ""}`,
     onPointerdown: (event) => {

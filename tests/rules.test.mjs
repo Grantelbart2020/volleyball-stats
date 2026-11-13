@@ -414,7 +414,7 @@ test("Zonenraster: 36 Felder, grobe Zone ergibt sich aus der feinen", () => {
 
 test("Zone wird nur gefragt, wenn der Ball ein Ziel hat", () => {
   assert.equal(zoneAsked("serve", "+"), true);
-  assert.equal(zoneAsked("serve", "="), true);    // z. B. AUS
+  assert.equal(zoneAsked("serve", "="), false);   // Aufschlagfehler: keine Zone (Nutzerwunsch, kein AUS-Rand)
   assert.equal(zoneAsked("attack", "/"), false);  // geblockt
   assert.equal(zoneAsked("attack", "="), false);  // Angriffsfehler: keine Zone (Nutzerwunsch)
   assert.equal(zoneAsked("attack", "-"), true);

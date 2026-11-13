@@ -73,6 +73,8 @@ export function zoneAsked(action, quality) {
   if (!kind) return false;
   if (kind === "pass" && (quality === "=" || quality === "/")) return false;
   if (action === "attack" && (quality === "/" || quality === "=")) return false; // geblockt oder Fehler
+  // Aufschlagfehler (Aus/Netz): keine Zone – das Ziel hat keinen AUS-Rand (Nutzerwunsch 13.11.2026)
+  if (action === "serve" && quality === "=") return false;
   return true;
 }
 
