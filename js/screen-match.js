@@ -19,10 +19,10 @@ import { el, confirmButton, showError } from "./dom.js";
 import { t, tf } from "./i18n.js";
 import * as db from "./db.js";
 import {
-  OWN, OPP, applyEvent, checkOwnRoster, computeMatch, eventError, setStartError, suggestedFirstServe,
+  OWN, OPP, applyEvent, checkOwnRoster, computeMatch, eventError, setStartError, suggestedFirstServe, normalizeRole,
 } from "./rules.js";
 import { getSettings } from "./settings.js";
-import { eventText, formatDate, matchResultText, playerLabel } from "./match-format.js";
+import { eventText, formatDate, matchResultText, playerLabel, roleSelect } from "./match-format.js";
 import { liveScreen } from "./match-live.js";
 import { downloadFullBackup, downloadMatch, lastBackupAt } from "./backup-actions.js";
 
@@ -384,7 +384,14 @@ function ownRosterCard(ctx) {
             inMatch.checked = false;
             return showError(error, t(`error.${problems[0]}`));
           }
-          await db.addMatchPlayer({ matchId: match.id, side: OWN, personId: entry.personId, number: entry.number });
+          // Position aus dem Saison-Kader übernehmen. Wer dort Libero ist, wird als
+          // Libero vorgeschlagen, solange das Spiel nicht begonnen hat und noch Platz ist.
+          const role = entry.role ?? null;
+          const asLibero = role === "libero" && !started
+            && checkOwnRoster([...own, { isLibero: true }], match.rules).errors.length === 0;
+          await db.addMatchPlayer({
+            matchId: match.id, side: OWN, personId: entry.personId, number: entry.number, role, isLibero: asLibero,
+          });
         }
         ctx.rerender();
       },
@@ -404,12 +411,22 @@ function ownRosterCard(ctx) {
       },
     });
 
+    // Position nur für dieses Spiel ändern (der Saison-Kader bleibt, wie er ist).
+    // Auch während des Spiels erlaubt: Sie ändert nur die Anzeige, nicht die Regeln.
+    const roleInput = player && roleSelect(player.role, {
+      onChange: async () => {
+        await db.updateMatchPlayer(player.id, { role: normalizeRole(roleInput.value) });
+        ctx.rerender();
+      },
+    });
+
     return el("li", { class: "roster-row" },
       el("label", { class: "checkbox-inline grow" },
         inMatch,
         el("span", { class: "roster-number" }, entry.number),
         el("span", { class: "roster-name" }, entry.name),
       ),
+      roleInput,
       liberoBox && el("label", { class: "checkbox-inline" }, liberoBox, t("player.libero")),
     );
   };

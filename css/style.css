@@ -449,6 +449,15 @@ select:focus {
   flex: 1 1 120px;
 }
 
+/* Position im Kader (Anzeige und Auswahl) */
+.roster-role {
+  white-space: nowrap;
+}
+
+.role-select {
+  max-width: 13em;
+}
+
 /* Knöpfe rechts in der Zeile, auf schmalen Bildschirmen darunter */
 .roster-row .row-actions {
   margin-left: auto;

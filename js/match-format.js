@@ -5,6 +5,21 @@
 import { t, tf, getLanguage } from "./i18n.js";
 import { qualityDisplay } from "./ratings.js";
 import { BAND_NAMES, OUT } from "./zones.js";
+import { ROLES } from "./rules.js";
+import { el } from "./dom.js";
+
+// Position als Text: "Zuspieler" … ; ohne Position leer
+export function roleText(role) {
+  return role ? t(`role.${role}`) : "";
+}
+
+// Auswahlfeld für die Position (erste Zeile "keine Angabe" = Wert "")
+export function roleSelect(selected, attrs = {}) {
+  return el("select", { class: "role-select", "aria-label": t("role.label"), ...attrs },
+    el("option", { value: "", selected: !selected }, t("role.none")),
+    ROLES.map((role) => el("option", { value: role, selected: role === selected }, t(`role.${role}`))),
+  );
+}
 
 // Zone als Text: "AUS", "Zone 4", "Zone C4", "grüne Zone"
 export function zoneText(zone) {
