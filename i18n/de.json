@@ -65,6 +65,8 @@
   "settings.defaultRulesHint": "Werden beim Anlegen eines Spiels übernommen und können dort geändert werden. Bestehende Spiele behalten ihre Regeln.",
   "settings.resetRules": "Standardwerte",
   "settings.saved": "Gespeichert.",
+  "settings.version": "Version {n}",
+  "settings.versionDev": "Entwicklungsversion (ohne Offline-Speicher)",
   "rules.title": "Regeln für dieses Spiel",
   "rules.lockedHint": "Das Spiel hat schon begonnen, die Regeln sind deshalb gesperrt.",
   "rules.setsToWin": "Gewinnsätze",

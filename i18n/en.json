@@ -65,6 +65,8 @@
   "settings.defaultRulesHint": "Copied when a match is created and can be changed there. Existing matches keep their rules.",
   "settings.resetRules": "Defaults",
   "settings.saved": "Saved.",
+  "settings.version": "Version {n}",
+  "settings.versionDev": "Development version (no offline cache)",
   "rules.title": "Rules for this match",
   "rules.lockedHint": "The match has already started, so the rules are locked.",
   "rules.setsToWin": "Sets to win",
