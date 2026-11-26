@@ -18,7 +18,7 @@
   Größere Umbauten?       -> CACHE_VERSION um 1 erhöhen, dann wird alles frisch geladen.
 */
 
-const CACHE_VERSION = 20;
+const CACHE_VERSION = 21;
 const CACHE_NAME = `vbstats-v${CACHE_VERSION}`;
 
 // Alle Dateien, die die App zum Laufen braucht (Pfade relativ zu diesem Skript).
@@ -39,6 +39,7 @@ const APP_FILES = [
   "js/rules.js",
   "js/formation.js",
   "js/drag-swap.js",
+  "js/screen-system.js",
   "js/settings.js",
   "js/match-format.js",
   "js/match-live.js",

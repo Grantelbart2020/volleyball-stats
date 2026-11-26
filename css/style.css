@@ -1593,3 +1593,29 @@ body.live-mode main {
 .landscape .live-foot .btn-big {
   min-height: 42px;
 }
+
+/* ---------- Laufweg-System bearbeiten (screen-system.js) ---------- */
+.system-net {
+  border-bottom: 3px solid var(--text-muted);
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.system-court .system-spot {
+  min-height: 56px;
+}
+
+.system-spot.draggable {
+  cursor: grab;
+}
+
+.system-spot.drop-target {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 4px var(--warning);
+}
+
+.system-nav {
+  align-items: center;
+  text-align: center;
+}

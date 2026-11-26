@@ -192,6 +192,13 @@ export async function saveTeam({ id, name }) {
   return team;
 }
 
+// Ändert einzelne Felder eines Teams (z. B. Laufweg-Systeme), der Rest bleibt.
+export async function updateTeam(id, changes) {
+  const team = { ...(await getTeam(id)), ...changes, updatedAt: now() };
+  await run("teams", "readwrite", (s) => s.teams.put(team));
+  return team;
+}
+
 // Löscht ein Team, seine Kader-Einträge und seine Spiele. Personen bleiben erhalten.
 export function deleteTeam(id) {
   const stores = ["teams", "rosterEntries", "matches", "matchPlayers", "matchEvents"];

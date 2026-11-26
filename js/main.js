@@ -15,6 +15,7 @@ import { requestPersistentStorage } from "./db.js";
 import { readSetting, saveSetting } from "./settings.js";
 import { renderTeams } from "./screen-teams.js";
 import { renderTeam } from "./screen-team.js";
+import { renderSystem } from "./screen-system.js";
 import { renderMatchForm } from "./screen-match-form.js";
 import { renderMatch } from "./screen-match.js";
 import { renderReport } from "./screen-report.js";
@@ -44,6 +45,7 @@ function applyTheme(theme) {
     #/              -> Teamliste
     #/team/<id>     -> ein Team mit Kader und Spielen
     #/team/<id>/match/new -> neues Spiel anlegen
+    #/team/<id>/system/<id> -> Laufweg-System bearbeiten
     #/match/<id>    -> ein Spiel (Kader, Satz starten, Spielstand)
     #/match/<id>/live -> Live-Eingabe, solange ein Satz läuft
     #/match/<id>/edit -> Spielangaben ändern
@@ -65,6 +67,8 @@ async function renderRoute() {
   try {
     if ((route = /^#\/team\/([\w-]+)$/.exec(hash))) {
       await renderTeam(app, route[1]);
+    } else if ((route = /^#\/team\/([\w-]+)\/system\/([\w-]+)$/.exec(hash))) {
+      await renderSystem(app, route[1], route[2]);
     } else if ((route = /^#\/team\/([\w-]+)\/match\/new$/.exec(hash))) {
       await renderMatchForm(app, { teamId: route[1] });
     } else if ((route = /^#\/match\/([\w-]+)\/edit$/.exec(hash))) {

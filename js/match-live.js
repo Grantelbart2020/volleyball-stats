@@ -437,7 +437,7 @@ function courtHalf(ctx, set, team, side) {
     (Annahme-Formation bzw. Spielposition). Die Regeln nutzen weiter ts.lineup.
   */
   const phase = formationPhase(set.rally, team, set.serving);
-  const planned = formationOn(ctx, team) ? courtFields(ts.lineup, (id) => roleOf(ctx, id), phase) : ts.lineup;
+  const planned = formationOn(ctx, team) ? courtFields(ts.lineup, (id) => roleOf(ctx, id), phase, ctx.systems[team]) : ts.lineup;
   const swapped = swapsFor(ctx, set, team, phase);
   const fields = applySwaps(planned, swapped.pairs);
   const layout = LAYOUTS[side];

@@ -10,6 +10,7 @@ import { t } from "./i18n.js";
 import * as db from "./db.js";
 import { RULE_LIMITS, defaultRules, seasonForDate } from "./rules.js";
 import { getSettings } from "./settings.js";
+import { pickSystem, teamSystems } from "./formation.js";
 
 /* ---------- Regelwerte als Eingabefelder ---------- */
 
@@ -108,6 +109,11 @@ export async function renderMatchForm(container, { teamId, matchId }) {
   const competitionInput = el("input", {
     type: "text", maxLength: 60, value: match?.competition ?? "", placeholder: t("match.competitionPlaceholder"),
   });
+  // Laufweg-System des eigenen Teams für dieses Spiel (auch während des Spiels änderbar)
+  const chosenSystem = pickSystem(team, match?.systemId);
+  const systemSelect = el("select", {},
+    teamSystems(team).map((system) => el("option", { value: system.id, selected: system.id === chosenSystem.id }, system.name)),
+  );
   const noteInput = el("textarea", { maxLength: 500, rows: 3, value: match?.note ?? "" });
   const rules = rulesFields(match?.rules ?? getSettings().rules, started);
   const error = el("p", { class: "form-error", hidden: true });
@@ -133,6 +139,7 @@ export async function renderMatchForm(container, { teamId, matchId }) {
         homeAway: homeAwaySelect.value || null,
         competition: competitionInput.value.trim(),
         note: noteInput.value.trim(),
+        systemId: systemSelect.value,
         rules: started ? match.rules : ruleResult.rules,
       });
       // Gegner ist ein angelegtes Team: dessen Saison-Kader übernehmen (nur fehlende Nummern)
@@ -148,6 +155,7 @@ export async function renderMatchForm(container, { teamId, matchId }) {
     el("label", { class: "field" }, el("span", {}, t("match.homeAway")), homeAwaySelect),
     el("label", { class: "field" }, el("span", {}, t("match.competition")), competitionInput),
     el("label", { class: "field" }, el("span", {}, t("match.note")), noteInput),
+    el("label", { class: "field" }, el("span", {}, t("match.system")), systemSelect),
     el("details", { class: "rules-details" },
       el("summary", {}, t("rules.title")),
       started && el("p", { class: "muted small" }, t("rules.lockedHint")),
