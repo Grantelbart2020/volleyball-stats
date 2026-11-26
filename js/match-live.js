@@ -19,6 +19,7 @@ import { ACTIONS, menuCodes, qualityDisplay } from "./ratings.js";
 import { createRadialMenu } from "./radial-menu.js";
 import { zoneAsked, zoneKind } from "./zones.js";
 import { zoneField } from "./zone-picker.js";
+import { courtFields, formationPhase } from "./formation.js";
 import { causeLabel, playerLabel, qualityLabel, qualityText, touchText } from "./match-format.js";
 
 /* ---------- Punkt per Knopf: Grund und Verursacher ---------- */
@@ -96,7 +97,9 @@ function pointBar(ctx, set) {
   Das Kreismenü wird nur EINMAL erzeugt (es hängt am <body>) und bei jedem
   Antippen wiederverwendet. "touchDraft" merkt sich, wer gerade angetippt wurde
   und welche Aktion in der Mitte steht:
-    { ctx, team, playerId, action }
+    { ctx, team, playerId, action, courtPos }
+  courtPos = Feld 1–6, auf dem die Person gerade angezeigt wird (tatsächliche
+  Position, zählt für die Statistik; fehlt bei "Mannschaft").
 */
 let menu = null;
 let touchDraft = null;
@@ -127,6 +130,7 @@ function getMenu() {
           type: "touch", team: draft.team, playerId: draft.playerId,
           action: draft.action, quality: menuCodes(draft.action)[index],
         };
+        if (draft.courtPos) touch.courtPos = draft.courtPos;
         // Erst prüfen: Eine Berührung, die ohnehin abgelehnt wird, braucht keine Zone.
         // (addEvent zeigt den Fehler dann an.)
         const { ctx } = draft;
@@ -190,10 +194,10 @@ function zoneBar(ctx) {
 }
 
 // Finger setzt auf einem Spieler (oder "Mannschaft") auf -> Kreismenü mit Aktionsvorschlag
-function startTouch(event, ctx, team, playerId) {
+function startTouch(event, ctx, team, playerId, courtPos) {
   event.preventDefault(); // verhindert Textauswahl/Scrollen beim Ziehen
   const set = ctx.state.activeSet;
-  touchDraft = { ctx, team, playerId, action: suggestAction(set, team, playerId) };
+  touchDraft = { ctx, team, playerId, action: suggestAction(set, team, playerId), courtPos };
   getMenu().start(event, { team, playerId });
 }
 
@@ -381,12 +385,12 @@ function courtHalf(ctx, set, team, side) {
   const causeMode = cause?.team === team;
   const blocked = causeMode ? false : touchBlocked(set, team);
   // Antippen startet das Kreismenü (pointerdown = Finger oder Maus drückt)
-  const tapHandler = (playerId) => (event) => {
+  const tapHandler = (playerId, courtPos) => (event) => {
     if (causeMode) {
       event.preventDefault();
       if (cause.ids.includes(playerId)) savePoint(ctx, playerId);
     } else if (!blocked) {
-      startTouch(event, ctx, team, playerId);
+      startTouch(event, ctx, team, playerId, courtPos);
     }
   };
 
@@ -427,14 +431,23 @@ function courtHalf(ctx, set, team, side) {
     );
   }
 
+  /*
+    Laufwege (formation.js): Das eigene Team steht dort, wo es tatsächlich spielt
+    (Annahme-Formation bzw. Spielposition). Die Regeln nutzen weiter ts.lineup.
+  */
+  const fields = formationOn(ctx, team)
+    ? courtFields(ts.lineup, (id) => roleOf(ctx, id), formationPhase(set.rally, team, set.serving))
+    : ts.lineup;
   const layout = LAYOUTS[side];
   const spots = layout.order.map((index) => {
-    const player = ctx.playerById.get(ts.lineup[index]);
-    const isServer = index === 0 && set.serving === team;
+    const id = fields[index];
+    const player = ctx.playerById.get(id);
+    const isServer = id === ts.lineup[0] && set.serving === team;
     const classes = ["court-spot", player?.isLibero && "libero", isServer && "server", causeMode && "cause-pick"]
       .filter(Boolean).join(" ");
-    return el("button", { type: "button", class: classes, disabled: blocked, onPointerdown: tapHandler(ts.lineup[index]) },
-      el("span", { class: "spot-pos" }, index + 1),
+    return el("button", { type: "button", class: classes, disabled: blocked, onPointerdown: tapHandler(id, index + 1) },
+      // klein in der Ecke: offizielle Position (für Rotation und Aufschlag)
+      el("span", { class: "spot-pos" }, ts.lineup.indexOf(id) + 1),
       el("span", { class: "spot-number" }, player?.number ?? "?"),
       el("span", { class: "spot-name" }, player?.name ?? ""),
       isServer && el("span", { class: "spot-serve" }, "🏐"),
@@ -448,6 +461,17 @@ function courtHalf(ctx, set, team, side) {
     }, spots)),
     !barFirst && bar,
   );
+}
+
+// Laufwege an? Nur eigenes Team, Schalter pro Spiel (match.formation, Standard: an)
+function formationOn(ctx, team) {
+  return team === OWN && ctx.match.formation !== false;
+}
+
+// Position für die Laufwege; ein Libero dieses Spiels zählt immer als Libero
+function roleOf(ctx, id) {
+  const player = ctx.playerById.get(id);
+  return player?.isLibero ? "libero" : player?.role;
 }
 
 /* ---------- Laufender Ballwechsel und Punktvorschlag ---------- */
@@ -559,6 +583,16 @@ function teamTools(ctx, set, team) {
       disabled: set.rally.length > 0 || pendingPoint, active: isOpen("sub"),
       onClick: open("sub"),
     }));
+    if (team === OWN) {
+      const on = formationOn(ctx, team);
+      buttons.push(iconButton({
+        icon: "🏃", label: t(on ? "live.formationOff" : "live.formationOn"), active: on,
+        onClick: async () => {
+          await db.saveMatch({ id: ctx.match.id, formation: !on });
+          ctx.rerender();
+        },
+      }));
+    }
     if (validLiberoSwaps(set, team).length) {
       buttons.push(iconButton({
         icon: "L", label: tf("live.liberoButton", { team: ctx.names[team] }),
