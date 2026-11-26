@@ -89,3 +89,20 @@ function reception(lineup, roleOf) {
   RECEPTION[s + 1].forEach((offset, i) => { fields[FIELDS[i] - 1] = at(offset); });
   return fields;
 }
+
+/*
+  Tausch im Spiel (Griff ≡): pairs = [[idA, idB], …] der Reihe nach.
+  Die beiden Personen tauschen ihre Felder; wer nicht (mehr) auf dem Feld ist,
+  wird übersprungen.
+*/
+export function applySwaps(fields, pairs) {
+  const result = [...fields];
+  for (const [a, b] of pairs) {
+    const ia = result.indexOf(a);
+    const ib = result.indexOf(b);
+    if (ia < 0 || ib < 0) continue;
+    result[ia] = b;
+    result[ib] = a;
+  }
+  return result;
+}

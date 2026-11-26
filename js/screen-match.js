@@ -468,9 +468,17 @@ function oppRosterCard(ctx) {
         ctx.rerender();
       },
     });
+    // Position nur für dieses Spiel (für die Laufwege des Gegners), auch während des Spiels
+    const roleInput = roleSelect(player.role, {
+      onChange: async () => {
+        await db.updateMatchPlayer(player.id, { role: normalizeRole(roleInput.value) });
+        ctx.rerender();
+      },
+    });
     return el("li", { class: "roster-row" },
       el("span", { class: "roster-number" }, player.number),
       el("span", { class: "roster-name" }, player.name || "–"),
+      roleInput,
       el("label", { class: "checkbox-inline" }, liberoBox, t("player.libero")),
       !used.has(player.id) && el("span", { class: "row-actions" },
         confirmButton(t("roster.remove"), t("common.reallyRemove"), async () => {

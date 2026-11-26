@@ -1,7 +1,7 @@
 // Tests für formation.js (Laufwege). Start: node --test tests/formation.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { courtFields, formationPhase } from "../js/formation.js";
+import { applySwaps, courtFields, formationPhase } from "../js/formation.js";
 
 const ROLE = { Z: "setter", A1: "outside", A2: "outside", M1: "middle", M2: "middle", D: "opposite", L: "libero" };
 const roleOf = (id) => ROLE[id];
@@ -51,4 +51,11 @@ test("Phase: Aufschlag, Annahme, nach der ersten eigenen Berührung", () => {
   assert.equal(formationPhase([{ team: "opp" }, { team: "own" }], "own", "opp"), "play");
   assert.equal(formationPhase([{ team: "own" }], "own", "own"), "play");
   assert.deepEqual(courtFields(lineupFor(2), roleOf, "base"), lineupFor(2));
+});
+
+test("Tausch im Spiel: Felder tauschen, unbekannte Personen überspringen", () => {
+  const fields = ["a", "b", "c", "d", "e", "f"];
+  assert.deepEqual(applySwaps(fields, [["a", "c"]]), ["c", "b", "a", "d", "e", "f"]);
+  assert.deepEqual(applySwaps(fields, [["a", "c"], ["a", "f"]]), ["c", "b", "f", "d", "e", "a"]);
+  assert.deepEqual(applySwaps(fields, [["a", "x"]]), fields);
 });
