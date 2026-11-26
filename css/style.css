@@ -951,6 +951,50 @@ details summary {
   box-shadow: 0 0 0 3px var(--warning);
 }
 
+/* Feld = Spieler-Knopf + Griff ≡ (Griff liegt als eigenes Element über der Ecke) */
+.court-cell {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+}
+
+.spot-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Beim Ziehen: Original blass, Kopie folgt dem Finger, Ziel leuchtet */
+.drag-source {
+  opacity: 0.35;
+}
+
+.drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0.85;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+.court-spot.drop-target {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 4px var(--warning);
+}
+
 .spot-pos {
   position: absolute;
   top: 2px;
