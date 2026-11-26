@@ -84,9 +84,25 @@ export function renderSettings(container) {
     importSection(),
   );
 
+  const versionText = el("p", { class: "muted small" }, t("settings.versionDev"));
+  appVersion().then((n) => { if (n) versionText.textContent = tf("settings.version", { n }); });
+
   container.replaceChildren(
     el("a", { class: "back-link", href: "#/" }, `← ${t("nav.teams")}`),
     el("section", { class: "card" }, el("h2", {}, t("nav.settings")), form),
     backupCard,
+    versionText,
   );
+}
+
+// Version = Nummer im Namen des Offline-Speichers ("vbstats-v16" = CACHE_VERSION im Service Worker),
+// so steht die Nummer nur an einer Stelle. Ohne Service Worker (localhost) gibt es keinen Speicher → null.
+// shortcut: zeigt die installierte Version; der laufende Code ist erst nach erneutem Öffnen der App so neu.
+async function appVersion() {
+  if (!window.caches) return null;
+  const numbers = (await caches.keys())
+    .map((name) => /^vbstats-v(\d+)$/.exec(name))
+    .filter(Boolean)
+    .map((match) => Number(match[1]));
+  return numbers.length ? Math.max(...numbers) : null;
 }
