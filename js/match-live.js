@@ -226,8 +226,10 @@ const dismissed = new Set();
   Hoch- oder Querformat? matchMedia fragt den Browser (wie eine CSS-Media-Query).
   Dreht man das Handy, wird die Live-Seite neu gezeichnet (rerenderLive merkt
   sich dafür die Funktion der zuletzt gezeichneten Live-Seite).
+  Querformat nur bei wenig Höhe (Handy quer, ~360–450 px). Ein breites
+  PC-Fenster ist hoch genug und bekommt die normale Ansicht.
 */
-const landscapeQuery = window.matchMedia("(orientation: landscape)");
+const landscapeQuery = window.matchMedia("(orientation: landscape) and (max-height: 600px)");
 let rerenderLive = null;
 
 function onOrientationChange() {
