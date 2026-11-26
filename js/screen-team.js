@@ -5,8 +5,8 @@
 import { el, confirmButton, showError } from "./dom.js";
 import { t, tf } from "./i18n.js";
 import * as db from "./db.js";
-import { computeMatch, seasonForDate } from "./rules.js";
-import { formatDate, matchResultText } from "./match-format.js";
+import { computeMatch, seasonForDate, normalizeRole } from "./rules.js";
+import { formatDate, matchResultText, roleText, roleSelect } from "./match-format.js";
 
 // Merkt sich pro Team die gewählte Saison, solange die App offen ist.
 const selectedSeasonByTeam = new Map();
@@ -191,6 +191,7 @@ function rosterRow(entry, canTransfer, rerender) {
   return el("li", { class: "roster-row" },
     el("span", { class: "roster-number" }, entry.number),
     el("span", { class: "roster-name" }, entry.name),
+    entry.role && el("span", { class: "roster-role muted small" }, roleText(entry.role)),
     el("span", { class: "row-actions" },
       el("button", {
         type: "button", class: "btn",
@@ -212,6 +213,7 @@ function rosterRow(entry, canTransfer, rerender) {
 function rosterEditRow(entry, roster, rerender) {
   const numberInput = el("input", { type: "text", inputMode: "numeric", maxLength: 2, value: entry.number, class: "input-number" });
   const nameInput = el("input", { type: "text", maxLength: 60, value: entry.name });
+  const roleInput = roleSelect(entry.role);
   const error = el("p", { class: "form-error", hidden: true });
 
   const form = el("form", {
@@ -225,13 +227,14 @@ function rosterEditRow(entry, roster, rerender) {
       if (roster.some((e) => e.number === number && e.id !== entry.id)) {
         return showError(error, t("error.numberTaken"));
       }
-      await db.updateRosterEntry(entry, { number, name });
+      await db.updateRosterEntry(entry, { number, name, role: normalizeRole(roleInput.value) });
       editingEntryId = null;
       rerender();
     },
   },
     numberInput,
     nameInput,
+    roleInput,
     el("button", { type: "submit", class: "btn btn-primary" }, t("common.save")),
     el("button", { type: "button", class: "btn", onClick: () => { editingEntryId = null; rerender(); } }, t("common.cancel")),
   );
@@ -287,7 +290,12 @@ function addPlayerForm(teamId, season, roster, persons, rerender) {
   const available = persons.filter((p) => !inRoster.has(p.id));
 
   const personSelect = el("select", {
-    onChange: () => { nameInput.hidden = personSelect.value !== ""; },
+    onChange: () => {
+      nameInput.hidden = personSelect.value !== "";
+      // Bestehende Person: Position aus ihrer letzten Saison in diesem Team vorschlagen
+      const person = available.find((p) => p.id === personSelect.value);
+      roleInput.value = person?.lastRole ?? "";
+    },
   },
     el("option", { value: "" }, t("roster.newPerson")),
     available.map((p) => el("option", { value: p.id }, p.name)),
@@ -296,6 +304,7 @@ function addPlayerForm(teamId, season, roster, persons, rerender) {
     type: "text", inputMode: "numeric", maxLength: 2, placeholder: t("roster.number"), class: "input-number",
   });
   const nameInput = el("input", { type: "text", maxLength: 60, placeholder: t("roster.name") });
+  const roleInput = roleSelect(null);
   const error = el("p", { class: "form-error", hidden: true });
 
   const form = el("form", {
@@ -308,13 +317,14 @@ function addPlayerForm(teamId, season, roster, persons, rerender) {
       if (number === null) return showError(error, t("error.numberFormat"));
       if (!personId && !name) return showError(error, t("error.nameRequired"));
       if (roster.some((e) => e.number === number)) return showError(error, t("error.numberTaken"));
-      await db.addToRoster({ teamId, season, number, personId, name });
+      await db.addToRoster({ teamId, season, number, personId, name, role: normalizeRole(roleInput.value) });
       rerender();
     },
   },
     available.length > 0 && personSelect, // Auswahl nur zeigen, wenn es bestehende Personen gibt
     numberInput,
     nameInput,
+    roleInput,
     el("button", { type: "submit", class: "btn btn-primary" }, t("roster.addButton")),
   );
 

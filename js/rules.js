@@ -523,6 +523,21 @@ export function substitutionError(set, team, { outId, inId, exceptional }, rules
   return "notAllowed";
 }
 
+/* ---------- Positionen (Spezialisierung) ---------- */
+
+/*
+  Position eines Spielers (Nutzerentscheidung 16.11.2026). Gespeichert als "role"
+  am Saison-Kader (Standard) und am Spielkader (pro Spiel änderbar).
+  Kein Wert (null) = keine Angabe. Die Regeln (Rotation, Libero) hängen NICHT
+  davon ab, die Position dient nur der Anzeige auf dem Spielfeld.
+*/
+export const ROLES = ["setter", "outside", "middle", "opposite", "libero"];
+
+// Gibt eine gültige Position oder null zurück (z. B. für Werte aus Formularen).
+export function normalizeRole(value) {
+  return ROLES.includes(value) ? value : null;
+}
+
 /* ---------- Punkt mit Grund ---------- */
 
 /*

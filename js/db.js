@@ -12,14 +12,15 @@
     teams          { id, name, createdAt, updatedAt }
     persons        { id, name, createdAt, updatedAt }
                    -> eine Person bleibt über alle Saisons dieselbe (feste id)
-    rosterEntries  { id, teamId, season, personId, number, createdAt, updatedAt }
+    rosterEntries  { id, teamId, season, personId, number, role, createdAt, updatedAt }
                    -> Saison-Kader: "Person X spielt in Saison Y für Team Z mit Nummer N"
   ab Version 2:
     matches        { id, teamId, season, date, opponent, opponentTeamId, homeAway, competition,
                      note, rules, ownSideTop, createdAt, updatedAt }
                    -> ein Spiel; rules = Regelwerte für genau dieses Spiel
                       opponentTeamId = Gegner ist ein angelegtes Team (sonst null, nur Name)
-    matchPlayers   { id, matchId, side, personId, number, name, isLibero, createdAt, updatedAt }
+    matchPlayers   { id, matchId, side, personId, number, name, isLibero, role, createdAt, updatedAt }
+                   role = Position (rules.js ROLES) oder null; ältere Einträge ohne role = keine Angabe
                    -> Spielkader beider Teams. side "own": personId aus dem Saison-Kader,
                       side "opp": Gegner mit Nummer und optionalem Namen
     matchEvents    { id, matchId, seq, type, ..., createdAt }
@@ -240,7 +241,15 @@ export async function listTeamPersons(teamId, season) {
   }));
   const ids = new Set(entries.filter((e) => e.teamId === teamId).map((e) => e.personId));
   const elsewhere = new Set(entries.filter((e) => e.teamId !== teamId && e.season === season).map((e) => e.personId));
-  return persons.filter((p) => ids.has(p.id) && !elsewhere.has(p.id)).sort(byName);
+  // lastRole: Position aus der neuesten Saison in diesem Team (Vorschlag beim Hinzufügen)
+  const lastRole = new Map();
+  for (const e of entries.filter((x) => x.teamId === teamId).sort((a, b) => a.season.localeCompare(b.season))) {
+    if (e.role) lastRole.set(e.personId, e.role);
+  }
+  return persons
+    .filter((p) => ids.has(p.id) && !elsewhere.has(p.id))
+    .map((p) => ({ ...p, lastRole: lastRole.get(p.id) ?? null }))
+    .sort(byName);
 }
 
 /*
@@ -254,7 +263,7 @@ export function transferRosterEntry(entry, toTeamId, number) {
     s.rosterEntries.delete(entry.id);
     s.rosterEntries.add({
       id: newId(), teamId: toTeamId, season: entry.season, personId: entry.personId, number,
-      createdAt: now(), updatedAt: now(),
+      role: entry.role ?? null, createdAt: now(), updatedAt: now(),
     });
   });
 }
@@ -282,7 +291,7 @@ export async function listRoster(teamId, season) {
   - sonst: neue Person mit "name" wird angelegt
   Gibt { personId } zurück.
 */
-export function addToRoster({ teamId, season, number, personId, name }) {
+export function addToRoster({ teamId, season, number, personId, name, role = null }) {
   return run(["rosterEntries", "persons"], "readwrite", (s) => {
     let id = personId;
     if (!id) {
@@ -290,19 +299,19 @@ export function addToRoster({ teamId, season, number, personId, name }) {
       s.persons.add({ id, name, createdAt: now(), updatedAt: now() });
     }
     s.rosterEntries.add({
-      id: newId(), teamId, season, personId: id, number,
+      id: newId(), teamId, season, personId: id, number, role,
       createdAt: now(), updatedAt: now(),
     });
     return { personId: id };
   });
 }
 
-// Ändert Nummer (am Kader-Eintrag) und Name (an der Person).
-export function updateRosterEntry(entry, { number, name }) {
+// Ändert Nummer und Position (am Kader-Eintrag) und Name (an der Person).
+export function updateRosterEntry(entry, { number, name, role = null }) {
   return run(["rosterEntries", "persons"], "readwrite", (s) => {
     s.rosterEntries.put({
       id: entry.id, teamId: entry.teamId, season: entry.season, personId: entry.personId,
-      number, createdAt: entry.createdAt, updatedAt: now(),
+      number, role, createdAt: entry.createdAt, updatedAt: now(),
     });
     const personRequest = s.persons.get(entry.personId);
     personRequest.onsuccess = () => {
@@ -326,7 +335,7 @@ export async function copyRoster(teamId, fromSeason, toSeason) {
     for (const entry of source) {
       s.rosterEntries.add({
         id: newId(), teamId, season: toSeason, personId: entry.personId, number: entry.number,
-        createdAt: now(), updatedAt: now(),
+        role: entry.role ?? null, createdAt: now(), updatedAt: now(),
       });
     }
   });
@@ -382,10 +391,10 @@ export async function listMatchPlayers(matchId) {
     .sort((a, b) => a.number - b.number);
 }
 
-// Fügt einen Spieler zum Spielkader hinzu: { matchId, side, personId, number, name, isLibero }
+// Fügt einen Spieler zum Spielkader hinzu: { matchId, side, personId, number, name, isLibero, role }
 export async function addMatchPlayer(data) {
   const player = {
-    personId: null, name: "", isLibero: false, ...data,
+    personId: null, name: "", isLibero: false, role: null, ...data,
     id: newId(), createdAt: now(), updatedAt: now(),
   };
   // Bei eigenen Spielern steht der Name an der Person, nicht doppelt hier.
@@ -426,7 +435,10 @@ export async function copyOpponentRoster(match) {
   let added = 0;
   for (const entry of roster) {
     if (taken.has(entry.number)) continue;
-    await addMatchPlayer({ matchId: match.id, side: "opp", personId: entry.personId, number: entry.number, name: entry.name });
+    await addMatchPlayer({
+      matchId: match.id, side: "opp", personId: entry.personId, number: entry.number, name: entry.name,
+      role: entry.role ?? null,
+    });
     added += 1;
   }
   return added;
