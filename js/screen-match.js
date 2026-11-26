@@ -22,6 +22,7 @@ import {
   OWN, OPP, applyEvent, checkOwnRoster, computeMatch, eventError, setStartError, suggestedFirstServe, normalizeRole,
 } from "./rules.js";
 import { getSettings } from "./settings.js";
+import { pickSystem } from "./formation.js";
 import { eventText, formatDate, matchResultText, playerLabel, roleSelect } from "./match-format.js";
 import { liveScreen } from "./match-live.js";
 import { downloadFullBackup, downloadMatch, lastBackupAt } from "./backup-actions.js";
@@ -77,8 +78,9 @@ export async function renderMatch(container, matchId, options = {}) {
     );
     return;
   }
-  const [team, players, events, roster] = await Promise.all([
+  const [team, oppTeam, players, events, roster] = await Promise.all([
     db.getTeam(match.teamId),
+    match.opponentTeamId ? db.getTeam(match.opponentTeamId) : null,
     db.listMatchPlayers(match.id),
     db.listMatchEvents(match.id),
     db.listRoster(match.teamId, match.season),
@@ -109,6 +111,8 @@ export async function renderMatch(container, matchId, options = {}) {
     settings: getSettings(),
     playerById: new Map(players.map((p) => [p.id, p])),
     names: { own: team?.name ?? "?", opp: match.opponent },
+    // Laufweg-Systeme: eigenes laut Spiel, Gegner = Standard seines Teams (ohne Team: 5-1)
+    systems: { own: pickSystem(team, match.systemId), opp: pickSystem(oppTeam, null) },
     rerender: () => renderMatch(container, matchId, { live }),
     // Speichert ein Ereignis (über die Warteschlange) und zeichnet neu.
     addEvent(event) {

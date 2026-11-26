@@ -38,6 +38,7 @@ const APP_FILES = [
   "js/rules.js",
   "js/formation.js",
   "js/drag-swap.js",
+  "js/screen-system.js",
   "js/settings.js",
   "js/match-format.js",
   "js/match-live.js",

@@ -7,6 +7,7 @@ import { t, tf } from "./i18n.js";
 import * as db from "./db.js";
 import { computeMatch, seasonForDate, normalizeRole } from "./rules.js";
 import { formatDate, matchResultText, roleText, roleSelect } from "./match-format.js";
+import { PATTERN_5_1, PATTERN_ROLES, buildSystem, pickSystem, teamSystems } from "./formation.js";
 
 // Merkt sich pro Team die gewählte Saison, solange die App offen ist.
 const selectedSeasonByTeam = new Map();
@@ -66,6 +67,76 @@ export async function renderTeam(container, teamId) {
     seasonCard(teamId, season, allSeasons, roster, rerender),
     matchesCard(teamId, season, matches, results),
     rosterCard(teamId, season, roster, persons, otherTeams, rerender),
+    systemsCard(team, rerender),
+  );
+}
+
+/* ---------- Karte: Laufweg-Systeme (formation.js, Editor in screen-system.js) ---------- */
+
+function systemsCard(team, rerender) {
+  const systems = teamSystems(team);
+  const defaultId = pickSystem(team, null).id;
+  const abbr = (role) => t(`roleShort.${role}`);
+  // Speichert die ganze Liste am Team (ohne eigene Liste wird das eingebaute 5-1 mitgespeichert)
+  const save = async (list, extra = {}) => {
+    await db.updateTeam(team.id, { systems: list, ...extra });
+    rerender();
+  };
+
+  const rows = systems.map((system) => el("li", { class: "roster-row" },
+    el("span", { class: "grow" },
+      el("strong", {}, system.name), " ",
+      el("span", { class: "muted small" }, system.pattern.map(abbr).join(" ")),
+      system.id === defaultId && el("span", { class: "muted small" }, ` · ${t("system.default")}`),
+    ),
+    el("span", { class: "row-actions" },
+      el("a", { class: "btn btn-small", href: `#/team/${team.id}/system/${system.id}` }, t("system.edit")),
+      system.id !== defaultId && el("button", {
+        type: "button", class: "btn btn-small", onClick: () => save(systems, { defaultSystemId: system.id }),
+      }, t("system.makeDefault")),
+      el("button", {
+        type: "button", class: "btn btn-small",
+        onClick: () => save([...systems, {
+          ...structuredClone(system), id: db.newId(), name: tf("system.copyName", { name: system.name }),
+        }]),
+      }, t("system.copy")),
+      systems.length > 1 && confirmButton(t("system.delete"), t("common.reallyRemove"), () =>
+        save(systems.filter((other) => other !== system), system.id === defaultId ? { defaultSystemId: null } : {})),
+    ),
+  ));
+
+  // Neues System: Name + Reihenfolge ab dem Zuspieler (Platz 1 ist immer der Zuspieler)
+  const error = el("p", { class: "form-error", hidden: true });
+  const nameInput = el("input", { type: "text", maxLength: 40, placeholder: t("system.name") });
+  const roleInputs = PATTERN_5_1.slice(1).map((preset) => el("select", { "aria-label": t("role.label") },
+    PATTERN_ROLES.map((role) => el("option", { value: role, selected: role === preset }, abbr(role)))));
+  const form = el("form", {
+    class: "stack",
+    onSubmit: async (event) => {
+      event.preventDefault();
+      const name = nameInput.value.trim();
+      if (!name) return showError(error, t("system.nameRequired"));
+      const system = buildSystem(db.newId(), name, ["setter", ...roleInputs.map((input) => input.value)]);
+      await db.updateTeam(team.id, { systems: [...systems, system] });
+      location.hash = `#/team/${team.id}/system/${system.id}`;
+    },
+  },
+    nameInput,
+    el("div", { class: "row-actions" },
+      el("span", { class: "muted small" }, t("system.pattern")),
+      el("strong", {}, abbr("setter")),
+      roleInputs,
+    ),
+    error,
+    el("div", { class: "row-actions" }, el("button", { type: "submit", class: "btn btn-primary" }, t("system.create"))),
+  );
+
+  return el("section", { class: "card" },
+    el("h3", {}, t("system.title")),
+    el("p", { class: "muted small" }, t("system.hint")),
+    el("ul", { class: "roster" }, rows),
+    el("h3", {}, t("system.new")),
+    form,
   );
 }
 
