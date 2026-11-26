@@ -153,6 +153,7 @@
   "live.noLiberoSwap": "No libero replacement is allowed right now.",
   "live.formationOn": "Turn on court movement for {team} (show players where they actually stand)",
   "live.formationOff": "Turn off court movement for {team} (show official positions)",
+  "live.dragSwap": "Drag to swap places with another player",
   "live.swapSides": "Switch sides",
   "undo.last": "Last",
   "undo.button": "Undo",

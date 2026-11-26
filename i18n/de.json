@@ -153,6 +153,7 @@
   "live.noLiberoSwap": "Gerade ist kein Libero-Tausch erlaubt.",
   "live.formationOn": "Laufwege {team} einschalten (Spieler dort zeigen, wo sie tatsächlich stehen)",
   "live.formationOff": "Laufwege {team} ausschalten (offizielle Positionen zeigen)",
+  "live.dragSwap": "Ziehen, um mit einem anderen Spieler den Platz zu tauschen",
   "live.swapSides": "Seiten tauschen",
   "undo.last": "Zuletzt",
   "undo.button": "Rückgängig",

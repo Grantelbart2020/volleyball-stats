@@ -19,7 +19,8 @@ import { ACTIONS, menuCodes, qualityDisplay } from "./ratings.js";
 import { createRadialMenu } from "./radial-menu.js";
 import { zoneAsked, zoneKind } from "./zones.js";
 import { zoneField } from "./zone-picker.js";
-import { courtFields, formationPhase } from "./formation.js";
+import { applySwaps, courtFields, formationPhase } from "./formation.js";
+import { dragSwap } from "./drag-swap.js";
 import { causeLabel, playerLabel, qualityLabel, qualityText, touchText } from "./match-format.js";
 
 /* ---------- Punkt per Knopf: Grund und Verursacher ---------- */
@@ -435,23 +436,39 @@ function courtHalf(ctx, set, team, side) {
     Laufwege (formation.js): Das Team steht dort, wo es tatsächlich spielt
     (Annahme-Formation bzw. Spielposition). Die Regeln nutzen weiter ts.lineup.
   */
-  const fields = formationOn(ctx, team)
-    ? courtFields(ts.lineup, (id) => roleOf(ctx, id), formationPhase(set.rally, team, set.serving))
-    : ts.lineup;
+  const phase = formationPhase(set.rally, team, set.serving);
+  const planned = formationOn(ctx, team) ? courtFields(ts.lineup, (id) => roleOf(ctx, id), phase) : ts.lineup;
+  const swapped = swapsFor(ctx, set, team, phase);
+  const fields = applySwaps(planned, swapped.pairs);
   const layout = LAYOUTS[side];
+  const buttons = [];
   const spots = layout.order.map((index) => {
     const id = fields[index];
     const player = ctx.playerById.get(id);
     const isServer = id === ts.lineup[0] && set.serving === team;
     const classes = ["court-spot", player?.isLibero && "libero", isServer && "server", causeMode && "cause-pick"]
       .filter(Boolean).join(" ");
-    return el("button", { type: "button", class: classes, disabled: blocked, onPointerdown: tapHandler(id, index + 1) },
+    const button = el("button", { type: "button", class: classes, disabled: blocked, onPointerdown: tapHandler(id, index + 1) },
       // klein in der Ecke: offizielle Position (für Rotation und Aufschlag)
       el("span", { class: "spot-pos" }, ts.lineup.indexOf(id) + 1),
       el("span", { class: "spot-number" }, player?.number ?? "?"),
       el("span", { class: "spot-name" }, player?.name ?? ""),
       isServer && el("span", { class: "spot-serve" }, "🏐"),
     );
+    button.dataset.playerId = id;
+    buttons.push(button);
+    // Griff ≡ unten rechts: Spieler auf einen anderen ziehen = Plätze tauschen (nur Anzeige)
+    const grip = !blocked && !causeMode && el("span", {
+      class: "spot-grip", role: "button", title: t("live.dragSwap"), "aria-label": t("live.dragSwap"),
+      onPointerdown: (event) => dragSwap(event, {
+        source: button, targets: buttons,
+        onDrop: (target) => {
+          swapped.pairs.push([id, target.dataset.playerId]);
+          ctx.rerender();
+        },
+      }),
+    }, "≡");
+    return el("div", { class: "court-cell" }, button, grip);
   });
 
   return el("div", { class: `court-half side-${side}` },
@@ -461,6 +478,20 @@ function courtHalf(ctx, set, team, side) {
     }, spots)),
     !barFirst && bar,
   );
+}
+
+/*
+  Tausch im Spiel (Griff ≡): gilt bis zum nächsten automatischen Wechsel
+  (Annahme -> Spielposition), spätestens bis zum Ende des Ballwechsels
+  (Nutzerentscheidung). Nur im Speicher, nicht in der Datenbank.
+  swapState[team] = { key, pairs }   key = Spiel, Satz, Ballwechsel, Phase
+*/
+const swapState = {};
+
+function swapsFor(ctx, set, team, phase) {
+  const key = `${ctx.match.id}|${set.number}|${set.rallies}|${phase}`;
+  if (swapState[team]?.key !== key) swapState[team] = { key, pairs: [] };
+  return swapState[team];
 }
 
 // Laufwege an? Schalter pro Spiel und Team (match.formation / match.formationOpp, Standard: an)
