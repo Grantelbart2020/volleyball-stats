@@ -432,7 +432,7 @@ function courtHalf(ctx, set, team, side) {
   }
 
   /*
-    Laufwege (formation.js): Das eigene Team steht dort, wo es tatsächlich spielt
+    Laufwege (formation.js): Das Team steht dort, wo es tatsächlich spielt
     (Annahme-Formation bzw. Spielposition). Die Regeln nutzen weiter ts.lineup.
   */
   const fields = formationOn(ctx, team)
@@ -463,9 +463,10 @@ function courtHalf(ctx, set, team, side) {
   );
 }
 
-// Laufwege an? Nur eigenes Team, Schalter pro Spiel (match.formation, Standard: an)
+// Laufwege an? Schalter pro Spiel und Team (match.formation / match.formationOpp, Standard: an)
+const formationKey = (team) => (team === OWN ? "formation" : "formationOpp");
 function formationOn(ctx, team) {
-  return team === OWN && ctx.match.formation !== false;
+  return ctx.match[formationKey(team)] !== false;
 }
 
 // Position für die Laufwege; ein Libero dieses Spiels zählt immer als Libero
@@ -583,16 +584,14 @@ function teamTools(ctx, set, team) {
       disabled: set.rally.length > 0 || pendingPoint, active: isOpen("sub"),
       onClick: open("sub"),
     }));
-    if (team === OWN) {
-      const on = formationOn(ctx, team);
-      buttons.push(iconButton({
-        icon: "🏃", label: t(on ? "live.formationOff" : "live.formationOn"), active: on,
-        onClick: async () => {
-          await db.saveMatch({ id: ctx.match.id, formation: !on });
-          ctx.rerender();
-        },
-      }));
-    }
+    const on = formationOn(ctx, team);
+    buttons.push(iconButton({
+      icon: "🏃", label: tf(on ? "live.formationOff" : "live.formationOn", { team: ctx.names[team] }), active: on,
+      onClick: async () => {
+        await db.saveMatch({ id: ctx.match.id, [formationKey(team)]: !on });
+        ctx.rerender();
+      },
+    }));
     if (validLiberoSwaps(set, team).length) {
       buttons.push(iconButton({
         icon: "L", label: tf("live.liberoButton", { team: ctx.names[team] }),
