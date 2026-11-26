@@ -118,6 +118,13 @@ const RECEPTION_5_1 = [
   [3, 2, 0, 1, 4, 5],
 ];
 
+/*
+  Ausnahme Spielposition 5-1, Rotation 1 (Nutzer 26.11.2026): D steht in der
+  Annahme vorne links und bleibt dort, A1 kommt von hinten rechts nach vorne
+  rechts (sonst liefen beide quer übers Feld): D | M1 | A1   L | A2 | Z
+*/
+const PLAY_5_1_R1 = [3, 2, 1, 5, 4, 0];
+
 function byField(row) {
   const table = new Array(6);
   row.forEach((k, i) => { table[FIELDS[i] - 1] = k; });
@@ -132,7 +139,7 @@ export function buildSystem(id, name, pattern) {
   const is51 = pattern.every((role, k) => role === PATTERN_5_1[k]);
   const system = { id, name, pattern: [...pattern], receive: {}, play: {} };
   for (let r = 1; r <= rotationCount(pattern); r++) {
-    system.play[r] = playTable(pattern, r);
+    system.play[r] = is51 && r === 1 ? byField(PLAY_5_1_R1) : playTable(pattern, r);
     system.receive[r] = is51 ? byField(RECEPTION_5_1[r - 1]) : [...system.play[r]];
   }
   return system;
