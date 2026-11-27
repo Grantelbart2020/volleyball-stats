@@ -37,7 +37,7 @@ test("Annahme-Formation 5-1 laut Tabelle des Nutzers", () => {
 });
 
 test("Spielposition: vorne A M Z/D, hinten L/M A Z/D", () => {
-  assert.equal(show(courtFields(lineupFor(1), roleOf, "play", system51)), "A1 M1 D | L A2 Z");
+  assert.equal(show(courtFields(lineupFor(1), roleOf, "play", system51)), "D M1 A1 | L A2 Z"); // Ausnahme Rotation 1
   assert.equal(show(courtFields(lineupFor(4), roleOf, "play", system51)), "A2 M2 Z | L A1 D");
 });
 

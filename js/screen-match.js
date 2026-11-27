@@ -256,10 +256,21 @@ function lineupPicker(players, preset, labelKey) {
   };
 }
 
+/*
+  Angefangene Eingaben im Formular "Satz starten" (nur im Speicher). Die Seite
+  baut sich z. B. beim Ändern des Kaders neu auf; ohne Entwurf wären Aufschlag
+  und Aufstellungen dann zurückgesetzt (Nutzerwunsch 26.11.2026).
+*/
+let setStartDraft = null;
+
 function setStartCard(ctx) {
   const { state, match, players } = ctx;
   const number = state.nextSetNumber;
-  const previous = [...ctx.events].reverse().find((e) => e.type === "setStart"); // zum Vorbelegen
+  const draftKey = `${match.id}|${number}`;
+  const draft = setStartDraft?.key === draftKey ? setStartDraft : null;
+  const lastStart = [...ctx.events].reverse().find((e) => e.type === "setStart");
+  // Vorbelegung: Entwurf, sonst letzter Satz
+  const previous = draft ?? lastStart;
   const ownRegular = side(ctx, OWN).filter((p) => !p.isLibero);
   const oppRegular = side(ctx, OPP).filter((p) => !p.isLibero);
   const ownLiberos = side(ctx, OWN).filter((p) => p.isLibero);
@@ -267,9 +278,10 @@ function setStartCard(ctx) {
 
   // Erster Aufschlag: in Satz 1 und im Entscheidungssatz ausgelost, sonst vorbelegt
   const suggestion = suggestedFirstServe(number, state.sets, match.rules);
+  const serve = draft ? draft.firstServe : suggestion;
   const serveSelect = el("select", {},
     el("option", { value: "" }, t("set.chooseServe")),
-    [OWN, OPP].map((team) => el("option", { value: team, selected: suggestion === team }, ctx.names[team])),
+    [OWN, OPP].map((team) => el("option", { value: team, selected: serve === team }, ctx.names[team])),
   );
 
   const ownLineup = lineupPicker(ownRegular, previous?.lineup.own, "set.position");
@@ -316,7 +328,17 @@ function setStartCard(ctx) {
   if (ownRegular.length < 6) missing.push(t("set.needOwnPlayers"));
   if (side(ctx, OPP).length < 6) missing.push(t("set.needOppPlayers"));
 
-  return el("section", { class: "card stack" },
+  // Jede Änderung im Formular (change-Ereignisse steigen bis hierher auf) merken
+  const saveDraft = () => {
+    setStartDraft = {
+      key: draftKey,
+      firstServe: serveSelect.value || null,
+      lineup: { own: ownLineup.read(), opp: oppToggle.checked ? oppLineup.read() : null },
+      liberoPartners: { own: partnerBoxes.filter((b) => b.box.checked).map((b) => b.id) },
+    };
+  };
+
+  return el("section", { class: "card stack", onChange: saveDraft },
     el("h3", {}, tf("set.start", { n: number })),
     missing.map((text) => el("p", { class: "form-warning" }, text)),
     el("label", { class: "field" }, el("span", {}, t("set.firstServe")), serveSelect),
