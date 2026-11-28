@@ -350,8 +350,7 @@ export function liveScreen(ctx) {
   if (panel && panel.matchId !== match.id) panel = null;
   if (pendingZone && pendingZone.matchId !== match.id) pendingZone = null;
   if (pendingBlock && pendingBlock.matchId !== match.id) pendingBlock = null;
-  // Auszeit-Check verschwindet mit der ersten Berührung des nächsten Ballwechsels
-  if (briefing && (briefing.matchId !== match.id || set.rally.length)) briefing = null;
+  if (briefing && briefing.matchId !== match.id) briefing = null;
   if (pendingPoint && (pendingPoint.matchId !== match.id || rallyError(set))) pendingPoint = null;
   rerenderLive = ctx.rerender;
 
@@ -373,6 +372,11 @@ export function liveScreen(ctx) {
   const head = el("div", { class: "live-head" },
     el("a", { class: "btn btn-small", href: `#/match/${match.id}` }, `☰ ${t("live.menu")}`),
     scoreboard(ctx, set),
+    // Auszeit-Check jederzeit von Hand öffnen, ohne dass eine Auszeit gezählt wird
+    el("button", {
+      type: "button", class: "btn btn-small", title: t("briefing.open"), "aria-label": t("briefing.open"),
+      onClick: () => { briefing = { matchId: match.id, whole: false }; ctx.rerender(); },
+    }, "📋"),
     el("button", {
       type: "button", class: "btn btn-small", title: t("undo.button"), "aria-label": t("undo.button"),
       onClick: async () => {
@@ -406,7 +410,6 @@ export function liveScreen(ctx) {
       pendingZone && zoneBar(ctx),
       pendingPoint && pointBar(ctx, set),
       pendingBlock && blockBar(ctx),
-      briefing && briefingCard(ctx, set),
       // Selbst geöffnete Auswahl (Wechsel/Libero) zuerst, damit sie ohne Scrollen zu sehen ist
       panel?.type === "sub" && subPanel(ctx, set, panel.team),
       panel?.type === "libero" && liberoPanel(ctx, set, panel.team),
@@ -418,14 +421,17 @@ export function liveScreen(ctx) {
       rallyView(ctx, set),
     ),
     el("div", { class: "live-foot" }, pointButtons),
+    // Auszeit-Check als Fenster über fast den ganzen Bildschirm: sperrt alles darunter bis "Schließen"
+    briefing && el("div", { class: "briefing-overlay" }, briefingCard(ctx, set)),
   );
 }
 
 /* ---------- Auszeit-Check (Trainerhilfe, timeout-report.js) ---------- */
 
 /*
-  Kurzbericht nach "Auszeit": Kennwerte beider Teams (immer) und die
-  auffälligsten Merkmale. Standard = laufender Satz, umschaltbar aufs ganze Spiel.
+  Kurzbericht nach "Auszeit" oder über den Knopf 📋 im Kopf: Kennwerte beider
+  Teams (immer) und die auffälligsten Merkmale. Standard = laufender Satz,
+  umschaltbar aufs ganze Spiel. Offen bis "Schließen" (Nutzerwunsch 28.11.2026).
   "briefing" bleibt beim Neuzeichnen erhalten:  null  oder  { matchId, whole }
 */
 let briefing = null;

@@ -429,6 +429,7 @@
   "report.aces": "Asse",
   "report.poorReception": "Gegner-Annahme schlecht",
   "report.definitions": "Effektivität = (# + +) / alle. Effizienz = (# − =) / alle.Bilanz: Punkte = Asse, Angriffs- und Blockpunkte; Fehler = Punktverluste aller Aktionen (auch Annahme, Zuspiel, Abwehr) sowie Netz, Übertritt und Karte mit Verursacher. Gezählt werden nur abgeschlossene Ballwechsel.",
+  "briefing.open": "Auszeit-Check anzeigen (ohne Auszeit)",
   "briefing.title": "Auszeit-Check",
   "briefing.thisSet": "Dieser Satz",
   "briefing.wholeMatch": "Ganzes Spiel",

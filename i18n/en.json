@@ -429,6 +429,7 @@
   "report.aces": "Aces",
   "report.poorReception": "Opp. reception poor",
   "report.definitions": "Effectiveness = (# + +) / all. Efficiency = (# − =) / all.Balance: points = aces, attack and block points; errors = lost points from all actions (including reception, set, dig) plus net, foot fault and card with a cause. Only completed rallies are counted.",
+  "briefing.open": "Show timeout check (no timeout)",
   "briefing.title": "Timeout check",
   "briefing.thisSet": "This set",
   "briefing.wholeMatch": "Whole match",

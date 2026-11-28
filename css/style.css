@@ -1620,11 +1620,28 @@ body.live-mode main {
   text-align: center;
 }
 
-/* Auszeit-Check (Kurzbericht nach "Auszeit", match-live.js) */
+/* Auszeit-Check (Kurzbericht nach "Auszeit" oder 📋, match-live.js):
+   Fenster über fast den ganzen Bildschirm, sperrt alles darunter */
+.briefing-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+}
+.briefing-overlay .briefing {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 1.1rem;
+}
 .briefing-table {
   border-collapse: collapse;
   width: 100%;
-  font-size: 0.9rem;
 }
 .briefing-table th,
 .briefing-table td {
