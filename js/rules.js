@@ -205,8 +205,9 @@ export function applyEvent(set, event) {
   else if (event.type === "liberoSwap") applyLiberoSwap(s.teams[event.team], event);
   else if (event.type === "timeout") s.teams[event.team].timeouts += 1;
   else if (event.type === "touch") {
-    const { team, playerId, action, quality, zone } = event;
-    s.rally.push({ team, playerId: playerId ?? null, action, quality, zone: zone ?? null });
+    const { team, playerId, action, quality, zone, courtPos } = event;
+    // courtPos = tatsächliches Feld bei der Berührung (Laufwege), für die Auswertung
+    s.rally.push({ team, playerId: playerId ?? null, action, quality, zone: zone ?? null, courtPos: courtPos ?? null });
   }
   return s;
 }

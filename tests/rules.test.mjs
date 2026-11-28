@@ -247,7 +247,7 @@ test("Berührungen sammeln sich im Ballwechsel, ein Punkt leert ihn", () => {
   const events = [setStart(1, OPP), touch(OPP, null, "serve", "+"), touch(OWN, "o5", "reception", "!")];
   const s = state(events).activeSet;
   assert.equal(s.rally.length, 2);
-  assert.deepEqual(s.rally[1], { team: OWN, playerId: "o5", action: "reception", quality: "!", zone: null });
+  assert.deepEqual(s.rally[1], { team: OWN, playerId: "o5", action: "reception", quality: "!", zone: null, courtPos: null });
   assert.deepEqual(s.score, { own: 0, opp: 0 }); // Berührungen ändern den Spielstand nicht
   const after = state([...events, point(OWN)]).activeSet;
   assert.deepEqual(after.rally, []);

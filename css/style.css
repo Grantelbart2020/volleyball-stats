@@ -1619,3 +1619,28 @@ body.live-mode main {
   align-items: center;
   text-align: center;
 }
+
+/* Auszeit-Check (Kurzbericht nach "Auszeit", match-live.js) */
+.briefing-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+.briefing-table th,
+.briefing-table td {
+  padding: 2px 6px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.briefing-table td.warn {
+  color: var(--warning);
+  font-weight: 700;
+}
+.briefing-list {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+.briefing-list li {
+  margin: 4px 0;
+}
