@@ -61,8 +61,10 @@ export function ratio(a, n) {
 /*
   Spielt die Ereignisse wie computeMatch() nach und sammelt jeden
   abgeschlossenen Ballwechsel:
-    { setNumber, serving, touches: [{ team, playerId, action, quality, zone }],
+    { setNumber, serving, server, ownLineup, touches: [{ team, playerId, action, quality, zone, courtPos }],
       winner, reason, causeId }
+  server = wer auf Position 1 stand (Aufschläger), ownLineup = eigene Aufstellung (Rotation);
+  beide null ohne Aufstellung.
   Ein noch laufender Ballwechsel (ohne Punkt) zählt nicht mit.
 */
 export function collectRallies(rules, players, events) {
@@ -82,6 +84,8 @@ export function collectRallies(rules, players, events) {
       rallies.push({
         setNumber: set.number,
         serving: set.serving,
+        server: set.teams[set.serving].lineup?.[0] ?? null,
+        ownLineup: set.teams[OWN].lineup ?? null,
         touches: set.rally,
         winner: event.winner,
         reason: event.reason ?? null,

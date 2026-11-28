@@ -21,6 +21,8 @@ import { zoneAsked, zoneKind } from "./zones.js";
 import { zoneField } from "./zone-picker.js";
 import { applySwaps, courtFields, formationPhase } from "./formation.js";
 import { dragSwap } from "./drag-swap.js";
+import { collectRallies, filterSet } from "./stats.js";
+import { buildBriefing, exceeds } from "./timeout-report.js";
 import { causeLabel, playerLabel, qualityLabel, qualityText, touchText } from "./match-format.js";
 
 /* ---------- Punkt per Knopf: Grund und Verursacher ---------- */
@@ -348,6 +350,7 @@ export function liveScreen(ctx) {
   if (panel && panel.matchId !== match.id) panel = null;
   if (pendingZone && pendingZone.matchId !== match.id) pendingZone = null;
   if (pendingBlock && pendingBlock.matchId !== match.id) pendingBlock = null;
+  if (briefing && briefing.matchId !== match.id) briefing = null;
   if (pendingPoint && (pendingPoint.matchId !== match.id || rallyError(set))) pendingPoint = null;
   rerenderLive = ctx.rerender;
 
@@ -369,6 +372,11 @@ export function liveScreen(ctx) {
   const head = el("div", { class: "live-head" },
     el("a", { class: "btn btn-small", href: `#/match/${match.id}` }, `☰ ${t("live.menu")}`),
     scoreboard(ctx, set),
+    // Auszeit-Check jederzeit von Hand öffnen, ohne dass eine Auszeit gezählt wird
+    el("button", {
+      type: "button", class: "btn btn-small", title: t("briefing.open"), "aria-label": t("briefing.open"),
+      onClick: () => { briefing = { matchId: match.id, whole: false }; ctx.rerender(); },
+    }, "📋"),
     el("button", {
       type: "button", class: "btn btn-small", title: t("undo.button"), "aria-label": t("undo.button"),
       onClick: async () => {
@@ -413,6 +421,71 @@ export function liveScreen(ctx) {
       rallyView(ctx, set),
     ),
     el("div", { class: "live-foot" }, pointButtons),
+    // Auszeit-Check als Fenster über fast den ganzen Bildschirm: sperrt alles darunter bis "Schließen"
+    briefing && el("div", { class: "briefing-overlay" }, briefingCard(ctx, set)),
+  );
+}
+
+/* ---------- Auszeit-Check (Trainerhilfe, timeout-report.js) ---------- */
+
+/*
+  Kurzbericht nach "Auszeit" oder über den Knopf 📋 im Kopf: Kennwerte beider
+  Teams (immer) und die auffälligsten Merkmale. Standard = laufender Satz,
+  umschaltbar aufs ganze Spiel. Offen bis "Schließen" (Nutzerwunsch 28.11.2026).
+  "briefing" bleibt beim Neuzeichnen erhalten:  null  oder  { matchId, whole }
+*/
+let briefing = null;
+
+const POSITION_KEYS = ["oppAttackPosPoor", "oppAttackPosGood", "oppAttackPos"];
+const percent = (value) => (value === null ? "–" : `${Math.round(value * 100)} %`);
+
+function briefingCard(ctx, set) {
+  const all = collectRallies(ctx.match.rules, ctx.players, ctx.events);
+  const { values, items } = buildBriefing(briefing.whole ? all : filterSet(all, set.number));
+
+  const subject = (item) => {
+    if (item.subject === undefined) return "";
+    if (POSITION_KEYS.includes(item.key)) return t(`briefing.pos.${item.subject}`);
+    if (item.key === "oppAttackZone") return tf("zone.named", { zone: item.subject });
+    return playerLabel(ctx.playerById.get(item.subject));
+  };
+  const itemText = (item) => tf(`briefing.item.${item.key}`, {
+    own: ctx.names.own, opp: ctx.names.opp, subject: subject(item),
+    count: item.count, n: item.n, pct: percent(item.value),
+  });
+
+  // Kennwerte: Zeile pro Wert, Spalte pro Team; Warnung nur für das eigene Team
+  const cell = (text, warn) => el("td", { class: warn ? "warn" : "" }, text);
+  const row = (label, own, opp) => el("tr", {}, el("th", {}, label), own, opp);
+  const { own, opp } = values;
+  const table = el("table", { class: "briefing-table" },
+    el("tr", {}, el("th", {}), el("th", {}, ctx.names.own), el("th", {}, ctx.names.opp)),
+    row(t("briefing.sideOut"),
+      cell(`${percent(own.sideOut.share)} (${own.sideOut.won}/${own.sideOut.n})`, exceeds("sideOut", own.sideOut.share, own.sideOut.n)),
+      cell(`${percent(opp.sideOut.share)} (${opp.sideOut.won}/${opp.sideOut.n})`)),
+    row(t("briefing.serveErrors"),
+      cell(`${own.serve.errors}/${own.serve.n}`, exceeds("serveErrors", own.serve.errorShare, own.serve.n)),
+      cell(`${opp.serve.errors}/${opp.serve.n}`)),
+    row(t("briefing.serveEffect"), cell(percent(own.serve.effect)), cell(percent(opp.serve.effect))),
+  );
+
+  const scopeButton = (whole) => el("button", {
+    type: "button", class: `btn btn-small${briefing.whole === whole ? " btn-primary" : ""}`,
+    onClick: () => { briefing.whole = whole; ctx.rerender(); },
+  }, t(whole ? "briefing.wholeMatch" : "briefing.thisSet"));
+
+  return el("section", { class: "panel briefing stack" },
+    el("div", { class: "row-actions" },
+      el("strong", {}, t("briefing.title")),
+      scopeButton(false), scopeButton(true),
+      el("button", { type: "button", class: "btn btn-small", onClick: () => { briefing = null; ctx.rerender(); } },
+        t("briefing.close")),
+    ),
+    table,
+    el("p", { class: "muted small" }, t("briefing.effectHint")),
+    items.length
+      ? el("ul", { class: "briefing-list" }, items.map((item) => el("li", {}, `⚠ ${itemText(item)}`)))
+      : el("p", { class: "muted small" }, t("briefing.nothing")),
   );
 }
 
@@ -707,7 +780,10 @@ function teamTools(ctx, set, team) {
     icon: "⏸", count: `${ts.timeouts}/${timeoutValues.max}`,
     label: tf("live.timeoutButton", timeoutValues),
     disabled: timeoutError(set, team, rules) || pendingPoint,
-    onClick: () => ctx.addEvent({ type: "timeout", team }),
+    onClick: () => {
+      briefing = { matchId: ctx.match.id, whole: false }; // Auszeit-Check anzeigen
+      ctx.addEvent({ type: "timeout", team });
+    },
   })];
 
   if (ts.lineup) { // ohne Aufstellung keine Wechsel
