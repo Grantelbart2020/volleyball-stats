@@ -132,11 +132,22 @@ function getMenu() {
           action: draft.action, quality: menuCodes(draft.action)[index],
         };
         if (draft.courtPos) touch.courtPos = draft.courtPos;
+        const { ctx } = draft;
+        // Block aus der Zonenleiste (Fall 2/3): erst den wartenden Angriff, dann den Block speichern.
+        // Geprüft wird der Block beim Speichern gegen den Stand MIT dem Angriff (addEvent).
+        if (draft.attack) {
+          pendingZone = null;
+          ctx.addEvent(draft.attack);
+          ctx.addEvent(touch);
+          return;
+        }
         // Erst prüfen: Eine Berührung, die ohnehin abgelehnt wird, braucht keine Zone.
         // (addEvent zeigt den Fehler dann an.)
-        const { ctx } = draft;
         const problem = eventError(ctx.state, touch, ctx.players, ctx.match.rules);
-        if (!problem && zoneAsked(touch.action, touch.quality)) askZone(ctx, touch);
+        if (!problem && isBlockedAttack(touch) && blockers(ctx, ctx.state.activeSet, otherTeam(touch.team)).length) {
+          pendingBlock = { matchId: ctx.match.id, touch }; // Fall 1: wer hat geblockt?
+          ctx.rerender();
+        } else if (!problem && zoneAsked(touch.action, touch.quality)) askZone(ctx, touch);
         else ctx.addEvent(touch);
       },
     });
@@ -174,6 +185,73 @@ function cancelZone(ctx) {
   ctx.rerender();
 }
 
+/*
+  Block (Nutzerwunsch 27.11.2026):
+    Fall 1 – Angriff "geblockt": statt der Zone den Blockspieler direkt auf
+             dem Feld antippen -> Angriff "/" + Block "#" werden gespeichert.
+    Fall 2/3 – Angriff mit Zonenabfrage: in der Zonenleiste stehen die
+             Blockspieler; Antippen öffnet das Kreismenü "Block" statt der Zone.
+  "pendingBlock" (Fall 1) merkt sich den wartenden Angriff:
+    null  oder  { matchId, touch }
+*/
+let pendingBlock = null;
+
+const isBlockedAttack = (touch) => touch.action === "attack" && touch.quality === "/";
+
+// Wer kann blocken? Die Spieler, die gerade vorne am Netz angezeigt werden (Feld 4, 3, 2), ohne Libero.
+// shortcut: ohne Aufstellung gibt es keine Blockspieler, dann bleibt es bei der bisherigen Eingabe.
+function blockers(ctx, set, team) {
+  if (!set.teams[team].lineup) return [];
+  const { fields } = displayedFields(ctx, set, team);
+  return [3, 2, 1].map((i) => fields[i]).filter((id) => id && !ctx.playerById.get(id)?.isLibero);
+}
+
+function saveBlock(ctx, playerId, courtPos) {
+  const { touch } = pendingBlock;
+  pendingBlock = null;
+  ctx.addEvent(touch);
+  if (playerId) {
+    const block = { type: "touch", team: otherTeam(touch.team), playerId, action: "block", quality: "#" };
+    if (courtPos) block.courtPos = courtPos;
+    ctx.addEvent(block);
+  }
+}
+
+// Leiste im Info-Bereich während Fall 1
+function blockBar(ctx) {
+  return el("div", { class: "zone-bar" },
+    el("p", {},
+      el("strong", {}, tf("block.whoTitle", { team: ctx.names[otherTeam(pendingBlock.touch.team)] })),
+      " ", el("span", { class: "muted small" }, t("block.whoHint"))),
+    el("div", { class: "row-actions" },
+      el("button", { type: "button", class: "btn", onClick: () => saveBlock(ctx, null) }, t("block.unknown")),
+      el("button", { type: "button", class: "btn", onClick: () => { pendingBlock = null; ctx.rerender(); } }, t("common.cancel")),
+    ),
+  );
+}
+
+// Fall 2/3: Blockspieler in der Zonenleiste -> Kreismenü "Block" für diese Person
+function blockChips(ctx) {
+  const { touch } = pendingZone;
+  if (touch.action !== "attack") return null;
+  const set = ctx.state.activeSet;
+  const team = otherTeam(touch.team);
+  const ids = blockers(ctx, set, team);
+  if (!ids.length) return null;
+  const { fields } = displayedFields(ctx, set, team);
+  return el("div", { class: "chip-list" },
+    el("span", { class: "muted small" }, t("block.chipsLabel")),
+    ids.map((id) => el("button", {
+      type: "button", class: "chip chip-touch",
+      onPointerdown: (event) => {
+        event.preventDefault();
+        touchDraft = { ctx, team, playerId: id, action: "block", courtPos: fields.indexOf(id) + 1, attack: touch };
+        getMenu().start(event, { team, playerId: id });
+      },
+    }, playerLabel(ctx.playerById.get(id)))),
+  );
+}
+
 // Leiste unter dem Spielfeld, solange eine Zone gewählt wird
 function zoneBar(ctx) {
   const { touch, kind, half } = pendingZone;
@@ -187,6 +265,7 @@ function zoneBar(ctx) {
       " ",
       el("span", { class: "muted small" }, t(kind === "pass" ? "zone.passHint" : "zone.targetHint")),
     ),
+    blockChips(ctx),
     el("div", { class: "row-actions" },
       el("button", { type: "button", class: "btn btn-primary", onClick: () => finishZone(ctx, null) }, t("zone.skip")),
       el("button", { type: "button", class: "btn", onClick: () => cancelZone(ctx) }, t("common.cancel")),
@@ -209,7 +288,7 @@ function startTouch(event, ctx, team, playerId, courtPos) {
   Die genaue Prüfung (passt die Bewertung?) macht rules.js beim Speichern.
 */
 function touchBlocked(set, team) {
-  if (pendingZone || pendingPoint) return true; // erst Zone bzw. Punktgrund fertig wählen
+  if (pendingZone || pendingPoint || pendingBlock) return true; // erst Zone, Punktgrund bzw. Blockspieler wählen
   if (rallyError(set)) return true;
   if (!suggestPoint(set)) return false;
   const last = set.rally[set.rally.length - 1];
@@ -268,6 +347,7 @@ export function liveScreen(ctx) {
   const { match } = ctx;
   if (panel && panel.matchId !== match.id) panel = null;
   if (pendingZone && pendingZone.matchId !== match.id) pendingZone = null;
+  if (pendingBlock && pendingBlock.matchId !== match.id) pendingBlock = null;
   if (pendingPoint && (pendingPoint.matchId !== match.id || rallyError(set))) pendingPoint = null;
   rerenderLive = ctx.rerender;
 
@@ -282,7 +362,7 @@ export function liveScreen(ctx) {
   // Reihenfolge wie auf dem Feld: erst das obere bzw. linke Team.
   const pointButtons = !pendingPoint && el("div", { class: "point-buttons" }, [firstTeam, secondTeam].map((team) =>
     el("button", {
-      type: "button", class: "btn btn-primary btn-big", disabled: Boolean(blocker || pendingZone),
+      type: "button", class: "btn btn-primary btn-big", disabled: Boolean(blocker || pendingZone || pendingBlock),
       onClick: () => { pendingPoint = { matchId: match.id, winner: team, reason: null }; ctx.rerender(); },
     }, tf("live.point", { team: ctx.names[team] }))));
 
@@ -294,6 +374,7 @@ export function liveScreen(ctx) {
       onClick: async () => {
         pendingZone = null;
         pendingPoint = null;
+        pendingBlock = null;
         await db.deleteLastMatchEvent(match.id);
         ctx.rerender();
       },
@@ -320,10 +401,11 @@ export function liveScreen(ctx) {
     el("div", { class: "live-info" },
       pendingZone && zoneBar(ctx),
       pendingPoint && pointBar(ctx, set),
+      pendingBlock && blockBar(ctx),
       // Selbst geöffnete Auswahl (Wechsel/Libero) zuerst, damit sie ohne Scrollen zu sehen ist
       panel?.type === "sub" && subPanel(ctx, set, panel.team),
       panel?.type === "libero" && liberoPanel(ctx, set, panel.team),
-      !pendingZone && !pendingPoint && TEAMS.map((team) => suggestionBox(ctx, set, team)),
+      !pendingZone && !pendingPoint && !pendingBlock && TEAMS.map((team) => suggestionBox(ctx, set, team)),
       blocker === "liberoMustExit" && el("p", { class: "form-warning" }, t("live.liberoBlocks")),
       // Wurde die letzte Eingabe abgelehnt (z. B. unpassende Spiegel-Berührung)? Einmal anzeigen.
       ctx.problem && el("p", { class: "form-error" }, t(`error.${ctx.problem}`)),
@@ -383,15 +465,25 @@ function courtHalf(ctx, set, team, side) {
     teamTools(ctx, set, team),
   );
   const barFirst = side === "top";
-  // Wird gerade der Verursacher eines Punktes gewählt? Dann wählt Antippen die Person.
+  /*
+    Wird gerade eine Person gewählt (Verursacher eines Punktes oder Blockspieler)?
+    Dann wählt Antippen die Person; alle anderen auf dieser Hälfte sind gesperrt.
+  */
   const cause = causeChoice(ctx, set);
-  const causeMode = cause?.team === team;
+  const pick = cause
+    ? { team: cause.team, ids: cause.ids, onPick: (id) => savePoint(ctx, id) }
+    : pendingBlock && {
+      team: otherTeam(pendingBlock.touch.team),
+      ids: blockers(ctx, set, otherTeam(pendingBlock.touch.team)),
+      onPick: (id, courtPos) => saveBlock(ctx, id, courtPos),
+    };
+  const causeMode = pick?.team === team;
   const blocked = causeMode ? false : touchBlocked(set, team);
   // Antippen startet das Kreismenü (pointerdown = Finger oder Maus drückt)
   const tapHandler = (playerId, courtPos) => (event) => {
     if (causeMode) {
       event.preventDefault();
-      if (cause.ids.includes(playerId)) savePoint(ctx, playerId);
+      if (pick.ids.includes(playerId)) pick.onPick(playerId, courtPos);
     } else if (!blocked) {
       startTouch(event, ctx, team, playerId, courtPos);
     }
@@ -434,23 +526,19 @@ function courtHalf(ctx, set, team, side) {
     );
   }
 
-  /*
-    Laufwege (formation.js): Das Team steht dort, wo es tatsächlich spielt
-    (Annahme-Formation bzw. Spielposition). Die Regeln nutzen weiter ts.lineup.
-  */
-  const phase = formationPhase(set.rally, team, set.serving);
-  const planned = formationOn(ctx, team) ? courtFields(ts.lineup, (id) => roleOf(ctx, id), phase, ctx.systems[team]) : ts.lineup;
-  const swapped = swapsFor(ctx, set, team, phase);
-  const fields = applySwaps(planned, swapped.pairs);
+  const { fields, swapped } = displayedFields(ctx, set, team);
   const layout = LAYOUTS[side];
   const buttons = [];
   const spots = layout.order.map((index) => {
     const id = fields[index];
     const player = ctx.playerById.get(id);
     const isServer = id === ts.lineup[0] && set.serving === team;
-    const classes = ["court-spot", player?.isLibero && "libero", isServer && "server", causeMode && "cause-pick"]
+    const pickable = causeMode && pick.ids.includes(id);
+    const classes = ["court-spot", player?.isLibero && "libero", isServer && "server", pickable && "cause-pick"]
       .filter(Boolean).join(" ");
-    const button = el("button", { type: "button", class: classes, disabled: blocked, onPointerdown: tapHandler(id, index + 1) },
+    const button = el("button", {
+      type: "button", class: classes, disabled: blocked || (causeMode && !pickable), onPointerdown: tapHandler(id, index + 1),
+    },
       // klein in der Ecke: offizielle Position (für Rotation und Aufschlag)
       el("span", { class: "spot-pos" }, ts.lineup.indexOf(id) + 1),
       el("span", { class: "spot-number" }, player?.number ?? "?"),
@@ -480,6 +568,19 @@ function courtHalf(ctx, set, team, side) {
     }, spots)),
     !barFirst && bar,
   );
+}
+
+/*
+  Laufwege (formation.js): Das Team steht dort, wo es tatsächlich spielt
+  (Annahme-Formation bzw. Spielposition), plus Tausch per Griff ≡.
+  Die Regeln nutzen weiter ts.lineup. fields[0] = wer auf Feld 1 angezeigt wird.
+*/
+function displayedFields(ctx, set, team) {
+  const { lineup } = set.teams[team];
+  const phase = formationPhase(set.rally, team, set.serving);
+  const planned = formationOn(ctx, team) ? courtFields(lineup, (id) => roleOf(ctx, id), phase, ctx.systems[team]) : lineup;
+  const swapped = swapsFor(ctx, set, team, phase);
+  return { fields: applySwaps(planned, swapped.pairs), swapped };
 }
 
 /*
